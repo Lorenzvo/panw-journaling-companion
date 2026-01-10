@@ -8,7 +8,7 @@ import type { UserMemory } from "../types/memory";
 import { quoteOfTheDay } from "../lib/quote";
 import { generateLocalReflection, generateEnhancedReflection } from "../lib/reflection";
 import { ConfirmDialog } from "../components/ConfirmDialog";
-import { Trash2, PencilLine, Plus } from "lucide-react";
+import { Trash2, PencilLine, Plus, ChevronDown } from "lucide-react";
 import { TutorialModal } from "../components/TutorialModal";
 
 
@@ -74,9 +74,26 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
   const [reflectError, setReflectError] = useState<string | null>(null);
 
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set());
 
   const todayLabel = useMemo(() => formatDateLong(new Date()), []);
   const hasDraft = text.trim().length > 0;
+
+  const dayGroups = useMemo(() => {
+    const groups = new Map<string, JournalEntry[]>();
+    for (const e of entries) {
+      const k = e.createdAt.slice(0, 10); // YYYY-MM-DD
+      const cur = groups.get(k);
+      if (cur) cur.push(e);
+      else groups.set(k, [e]);
+    }
+    const keys = Array.from(groups.keys()).sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
+    return keys.map((k) => ({
+      dayKey: k,
+      label: formatDateLong(new Date(`${k}T12:00:00`)),
+      entries: (groups.get(k) ?? []).slice().sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1)),
+    }));
+  }, [entries]);
 
   const selectedReflection = useMemo(() => {
     if (!selectedEntryId) return null;
@@ -113,6 +130,12 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     setSelectedEntryId(entry.id);
     setText(entry.text);
     setReflectError(null);
+    const dayKey = entry.createdAt.slice(0, 10);
+    setExpandedDays((prev) => {
+      const next = new Set(prev);
+      next.add(dayKey);
+      return next;
+    });
   }
 
   function saveNewEntry(): JournalEntry | null {
@@ -136,6 +159,12 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     setSelectedEntryId(entry.id);
     setEditingEntryId(entry.id);
     setText(trimmed); // keep it in editor so they can keep editing if they want
+    const dayKey = entry.createdAt.slice(0, 10);
+    setExpandedDays((prev) => {
+      const next = new Set(prev);
+      next.add(dayKey);
+      return next;
+    });
     return entry;
   }
 
@@ -161,6 +190,11 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
 
     setSelectedEntryId(entryId);
     setEditingEntryId(entryId);
+    setExpandedDays((prev) => {
+      const next = new Set(prev);
+      next.add(updated.createdAt.slice(0, 10));
+      return next;
+    });
     return updated;
   }
 
@@ -471,57 +505,86 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
               Edit anytime. Update & Reflect refreshes the reflection.
             </div>
           </div>
-          <div className="text-xs text-slate-500">{entries.length} saved</div>
+          <div className="text-xs text-slate-500">
+            {entries.length} saved · {dayGroups.length} day(s)
+          </div>
         </div>
 
         <div className="mt-3 space-y-2">
           {entries.length === 0 ? (
             <div className="text-sm text-slate-600">No entries yet.</div>
           ) : (
-            entries.slice(0, 8).map((e) => (
-              <div
-                key={e.id}
-                className={cn(
-                  "w-full rounded-2xl border px-3 py-3 transition flex items-start justify-between gap-3",
-                  selectedEntryId === e.id
-                    ? "border-slate-900 bg-white"
-                    : "border-slate-200 bg-white/70 hover:bg-white"
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => setSelectedEntryId(e.id)}
-                  className="flex-1 text-left"
-                >
-                  <div className="text-xs text-slate-500">
-                    {new Date(e.createdAt).toLocaleString()}
-                  </div>
-                  <div className="mt-1 text-sm text-slate-800 line-clamp-2">
-                    {e.text}
-                  </div>
-                </button>
-
-                <div className="flex gap-2">
+            dayGroups.map((g) => {
+              const expanded = expandedDays.has(g.dayKey);
+              return (
+                <div key={g.dayKey} className="rounded-2xl border border-slate-200 bg-white/70">
                   <button
                     type="button"
-                    onClick={() => beginEdit(e.id)}
-                    className="rounded-xl border border-slate-200 bg-white/80 p-2 text-slate-700 hover:bg-slate-50"
-                    title="Edit entry"
+                    onClick={() =>
+                      setExpandedDays((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(g.dayKey)) next.delete(g.dayKey);
+                        else next.add(g.dayKey);
+                        return next;
+                      })
+                    }
+                    className="w-full px-3 py-3 flex items-center justify-between gap-3 text-left"
+                    title={expanded ? "Hide entries" : "Show entries"}
                   >
-                    <PencilLine size={16} />
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{g.label}</div>
+                      <div className="text-xs text-slate-500">{g.entries.length} entr{g.entries.length === 1 ? "y" : "ies"}</div>
+                    </div>
+                    <ChevronDown size={18} className={cn("text-slate-500 transition-transform", expanded && "rotate-180")} />
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => onRequestDelete(e.id)}
-                    className="rounded-xl border border-slate-200 bg-white/80 p-2 text-slate-700 hover:bg-slate-50"
-                    title="Delete entry"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {expanded ? (
+                    <div className="px-3 pb-3 space-y-2">
+                      {g.entries.map((e) => (
+                        <div
+                          key={e.id}
+                          className={cn(
+                            "w-full rounded-2xl border px-3 py-3 transition flex items-start justify-between gap-3",
+                            selectedEntryId === e.id
+                              ? "border-slate-900 bg-white"
+                              : "border-slate-200 bg-white/70 hover:bg-white"
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setSelectedEntryId(e.id)}
+                            className="flex-1 text-left"
+                          >
+                            <div className="text-xs text-slate-500">{new Date(e.createdAt).toLocaleTimeString()}</div>
+                            <div className="mt-1 text-sm text-slate-800 line-clamp-2">{e.text}</div>
+                          </button>
+
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => beginEdit(e.id)}
+                              className="rounded-xl border border-slate-200 bg-white/80 p-2 text-slate-700 hover:bg-slate-50"
+                              title="Edit entry"
+                            >
+                              <PencilLine size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => onRequestDelete(e.id)}
+                              className="rounded-xl border border-slate-200 bg-white/80 p-2 text-slate-700 hover:bg-slate-50"
+                              title="Delete entry"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </Card>
