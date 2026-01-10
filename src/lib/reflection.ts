@@ -7,19 +7,29 @@ export type ReflectionOutput = {
   mode: "local" | "enhanced";
 };
 
+const SAFETY_NOTE =
+  "If you’re feeling like you might hurt yourself, you deserve real-time support. If you’re in the U.S., you can call or text **988**. If you’re elsewhere, I can help find local resources. If you’re in immediate danger, call your local emergency number.";
+
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
 function normalize(text: string) {
-  return text.trim().replace(/\s+/g, " ");
+  return (text ?? "").trim().replace(/\s+/g, " ");
 }
 
 function looksLikeGibberish(text: string) {
   const t = normalize(text);
-  if (t.length < 2) return true;
+  if (!t) return true;
+  if (t.length <= 2) return true;
 
-  const letters = (t.match(/[a-zA-Z]/g) ?? []).length;
+  const letters = (t.match(/[a-z]/gi) ?? []).length;
+  if (letters === 0) return true;
+
+  // Super low vowel ratio is a decent keysmash signal for longer strings.
+  const vowels = (t.match(/[aeiou]/gi) ?? []).length;
+  if (letters >= 8 && vowels / Math.max(1, letters) < 0.18) return true;
+
   const ratio = letters / Math.max(1, t.length);
 
   const words = t.split(" ").filter(Boolean);
@@ -31,7 +41,13 @@ function looksLikeGibberish(text: string) {
 
 function looksLikeSelfHarm(text: string) {
   const t = text.toLowerCase();
-  return /(suicid|kill myself|end my life|self harm|hurt myself|i want to die)/.test(t);
+  return /(suicid|kill myself|end my life|end it|self[- ]?harm|hurt myself|i want to die|want to die)/.test(t);
+}
+
+function ensureSafetyNote(mirror: string, text: string) {
+  if (!looksLikeSelfHarm(text)) return mirror;
+  if (/\b988\b/.test(mirror)) return mirror;
+  return [mirror, SAFETY_NOTE].filter(Boolean).join("\n\n");
 }
 
 type Tone = "positive" | "negative" | "mixed" | "neutral";
@@ -48,11 +64,35 @@ type Topic =
   | "health"
   | "general";
 
+function detectStartHelpIntent(text: string) {
+  const t = text.toLowerCase();
+  return (
+    /(where do i even start|where do i start|how do i start|dont know where to start|don't know where to start|don’t know where to start|where should i start|what do i write|help me journal|how do i journal|blank page|i'?m new to journaling|im new to journaling)/.test(
+      t
+    ) ||
+    (/\bstart\b/.test(t) && /\bwhere\b/.test(t) && t.length <= 40)
+  );
+}
+
+function detectTooTired(text: string) {
+  const t = text.toLowerCase();
+  return /(too tired|tired to journal|exhausted to journal|can't journal|cant journal|don'?t have the energy|dont have the energy|no energy|brain dead|i'?m done|im done|wiped|too exhausted)/.test(
+    t
+  );
+}
+
+function detectGoodNothingNew(text: string) {
+  const t = text.toLowerCase();
+  const calmPositive = /\b(good|great|fine|ok|okay|nice|calm)\b/.test(t);
+  const nothingMuch = /\b(nothing new|nothing much|nothing really|not much)\b/.test(t);
+  return calmPositive && nothingMuch;
+}
+
 function detectTone(text: string): Tone {
   const t = text.toLowerCase();
 
   const pos =
-    /\b(happy|excited|grateful|thankful|proud|relieved|good|great|amazing|fun|nice|love|win|won|blessed)\b/.test(
+    /\b(happy|excited|grateful|thankful|proud|relieved|good|great|amazing|fun|nice|love|calm|win|won|blessed)\b/.test(
       t
     );
 
@@ -70,17 +110,13 @@ function detectTone(text: string): Tone {
 function detectTopic(text: string): Topic {
   const t = text.toLowerCase();
 
-    // New to journaling / onboarding (catch very short asks too)
-    if (
-      /\b(where do i start|how do i start|dont know where to start|i don'?t know where to start|where should i even start|where should i start)\b/i.test(
-        t
-      ) ||
-      /\b(start journaling|journal(ing)?|document(ing)? my thoughts)\b/i.test(t) ||
-      // ultra-short advice asks
-      (/\bstart\b/i.test(t) && /\bwhere\b/i.test(t) && t.length <= 40)
-    ) {
-      return "new_to_journaling";
-    }
+  // New to journaling / onboarding (catch very short asks too)
+  if (
+    detectStartHelpIntent(t) ||
+    /\b(start journaling|journal(ing)?|document(ing)? my thoughts)\b/i.test(t)
+  ) {
+    return "new_to_journaling";
+  }
   
 
   // Mental wellness / patterns
@@ -93,13 +129,19 @@ function detectTopic(text: string): Topic {
   }
 
   // Work
-  if (/\b(boss|work|job|meeting|deadline|on-call|shift|coworker|manager|client|clients|call)\b/.test(t)) {
+  if (
+    /\b(boss|work|job|meeting|deadline|on-call|shift|coworker|manager|client|clients)\b/.test(t) ||
+    (/\bcall\b/.test(t) && /\b(client|clients|meeting|work|boss)\b/.test(t))
+  ) {
     return "work";
   }
 
   // Relationships
   if (
-    /\b(friend|friends|family|partner|relationship|dating|breakup|lonely|alone|argue|fight|conflict|roommate)\b/.test(t)
+    /\b(friend|friends|family|partner|relationship|dating|breakup|lonely|alone|argue|fight|conflict|roommate)\b/.test(
+      t
+    ) ||
+    (/\bcall\b/.test(t) && !/(client call|work call|business call|call with client)/.test(t))
   ) {
     return "relationships";
   }
@@ -134,27 +176,30 @@ function maybeMemoryLine(mem: UserMemory | undefined, tone: Tone, topic: Topic):
   if (!mem) return null;
 
   // subtle but demo-visible
-  const show = Math.random() < 0.33;
+  const show = Math.random() < 0.28;
   if (!show) return null;
 
   if ((tone === "negative" || tone === "mixed") && mem.coping.length) {
+    const c = pick(mem.coping);
     return pick([
-      `Small thing I’m remembering: you’ve said **${mem.coping[0]}** can help sometimes. Does that feel true today, or not really?`,
-      `You’ve mentioned **${mem.coping[0]}** helping before — not as a fix, just as a small reset.`,
+      `Small thing I’m remembering: you’ve said **${c}** can help sometimes. Does that feel true today, or not really?`,
+      `You’ve mentioned **${c}** helping before — not as a fix, just as a small reset.`,
     ]);
   }
 
-  if (tone === "positive" && mem.likes.length) {
+  if (tone === "positive" && mem.likes.length && topic !== "work") {
+    const l = pick(mem.likes);
     return pick([
-      `Tiny callback: you’ve mentioned you like **${mem.likes[0]}** — today has a similar calm vibe.`,
-      `This kind of reminds me of what you said about **${mem.likes[0]}** — small joys count.`,
+      `Tiny callback: you’ve mentioned you like **${l}** — small joys count.`,
+      `This kind of reminds me of what you said about **${l}** — it fits this lighter moment.`,
     ]);
   }
 
   if (mem.wins.length && tone !== "negative") {
+    const w = pick(mem.wins);
     return pick([
-      `Small reminder: you’ve had wins like **${mem.wins[0]}** — you’re building a pattern.`,
-      `You’ve been stacking small wins (like **${mem.wins[0]}**).`,
+      `Small reminder: you’ve had wins like **${w}** — you’re building a pattern.`,
+      `You’ve been stacking small wins (like **${w}**).`,
     ]);
   }
 
@@ -197,6 +242,65 @@ function localNewToJournaling(memLine: string | null): ReflectionOutput {
       "If that’s too much: write just one word for your mood.",
     ],
   ]);
+
+  return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), question, nudges };
+}
+
+function localTooTired(): ReflectionOutput {
+  return {
+    mode: "local",
+    mirror: pick([
+      "That’s completely valid. If you’re wiped, journaling can be tiny — not a project.",
+      "If you’re too tired to journal, that counts as information. Let’s make this a 10-second check-in.",
+    ]),
+    question: "Want a 10-second version so you still get the “I showed up” feeling?",
+    nudges: [
+      "Fill one blank: \"Today was ___.\"",
+      "Or: \"The main thing was ___.\"",
+      "Or: \"Tomorrow I want ___ (even if it’s just rest).\"",
+    ],
+  };
+}
+
+function localGoodNothingNew(memLine: string | null): ReflectionOutput {
+  const mirror = pick([
+    "Honestly, that’s a kind of win. “Good” and “nothing dramatic” can be exactly what you needed.",
+    "A steady day counts. It’s nice when nothing is on fire.",
+    "That sounds like a calm, okay day — and it’s worth noticing that.",
+  ]);
+
+  const question = pick([
+    "What made it feel good — people, progress, relief, or just a calmer pace?",
+    "Was there one small moment you’d want to remember from today?",
+    "If you could repeat one thing from today tomorrow, what would it be?",
+  ]);
+
+  const nudges = Math.random() < 0.45 ? ["Optional: one sentence you’d like to reread later."] : undefined;
+
+  return {
+    mode: "local",
+    mirror: [mirror, memLine].filter(Boolean).join("\n\n"),
+    question,
+    nudges,
+  };
+}
+
+function localRelationshipsPositive(_text: string, memLine: string | null): ReflectionOutput {
+  const mirror = pick([
+    "That sounds like a good connection moment — the kind that quietly refills you.",
+    "I’m glad there was something warm here. Relationship stuff can be heavy, so a lighter moment matters.",
+    "That reads like closeness that actually felt okay. That’s worth marking.",
+  ]);
+
+  const question = pick([
+    "What part of it felt most grounding — the conversation, the vibe, or feeling understood?",
+    "Did it give you energy, or more of a calm?",
+  ]);
+
+  const nudges =
+    Math.random() < 0.35
+      ? ["Optional: write one line you’d want to remember about how this felt."]
+      : undefined;
 
   return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), question, nudges };
 }
@@ -283,7 +387,7 @@ function localWorkStress(text: string, memLine: string | null): ReflectionOutput
   };
 }
 
-function localRelationships(text: string, memLine: string | null): ReflectionOutput {
+function localRelationships(_text: string, memLine: string | null): ReflectionOutput {
   const mirror = pick([
     "Relationship stuff hits different because it’s not just the event — it’s what it says about closeness, trust, or being understood.",
     "I hear the tension here. It sounds like part of you wants connection, and another part wants distance.",
@@ -380,21 +484,34 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
   const cleaned = normalize(entryText);
 
   if (looksLikeGibberish(cleaned)) {
-    return {
+    const out: ReflectionOutput = {
       mode: "local",
       mirror:
         "I’m here. That looks super short (or maybe a key-smash).\n\nIf you want, give me **one more sentence** — what happened today, or what you’re feeling right now.",
       question: "Do you want to write about your day, your mood, or one specific moment?",
       nudges: ["Finish: “Right now I feel…”", "Finish: “What’s on my mind is…”"],
     };
+    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+  }
+
+  // “I’m too tired” handling: keep it tiny and non-demanding.
+  if (detectTooTired(cleaned)) {
+    const out = localTooTired();
+    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
   }
 
   const tone = detectTone(cleaned);
   const topic = detectTopic(cleaned);
   const memLine = maybeMemoryLine(mem, tone, topic);
 
+  if (tone === "positive" && detectGoodNothingNew(cleaned)) {
+    const out = localGoodNothingNew(memLine);
+    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+  }
+
   if (topic === "new_to_journaling") return localNewToJournaling(memLine);
   if (topic === "mental_wellness") return localMentalWellness(memLine);
+  if (topic === "relationships" && tone === "positive") return localRelationshipsPositive(cleaned, memLine);
   if (topic === "relationships") return localRelationships(cleaned, memLine);
   if (topic === "decisions") return localDecisions(memLine);
   if (topic === "anxiety_rumination") return localAnxiety(memLine);
@@ -405,29 +522,75 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
   if (topic === "work" && (tone === "negative" || tone === "mixed")) return localWorkStress(cleaned, memLine);
 
   if (tone === "positive") {
-    // generic positive fallback
-    return {
-      mode: "local",
-      mirror: ["That sounds like a good moment to keep.", memLine].filter(Boolean).join("\n\n"),
-      question: Math.random() < 0.3 ? "What part do you want to remember most?" : undefined,
-    };
+    const short = cleaned.length < 40;
+    const out: ReflectionOutput = short
+      ? {
+          mode: "local",
+          mirror: [
+            pick([
+              "That sounds like a small win, and it counts.",
+              "Nice. Even a simple “good” day deserves a little space.",
+              "I’m glad there was something good in there.",
+            ]),
+            memLine,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+          question: pick([
+            "What made it feel good — people, progress, relief, or just a calmer pace?",
+            "If you had to name one detail you’d want to remember, what is it?",
+            "What do you want to repeat from today, even gently?",
+          ]),
+          nudges: Math.random() < 0.25 ? ["Optional: one sentence you’d like to reread later."] : undefined,
+        }
+      : {
+          mode: "local",
+          mirror: [
+            pick([
+              "That sounds like a good moment to keep.",
+              "That reads like something that actually gave you a little back.",
+              "I’m glad you let this land enough to write it down.",
+            ]),
+            memLine,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+          question: Math.random() < 0.3 ? "What part do you want to remember most?" : undefined,
+        };
+
+    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
   }
 
   if (tone === "negative" || tone === "mixed") {
-    return {
+    const out: ReflectionOutput = {
       mode: "local",
       mirror: ["That sounds heavy. I’m here with you in it.", memLine].filter(Boolean).join("\n\n"),
       question: "What feels like the sharpest part of this?",
       nudges: Math.random() < 0.4 ? ["Write one sentence: “What I needed was…”"] : undefined,
     };
+    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
   }
 
   // neutral fallback
-  return {
+  const out: ReflectionOutput = {
     mode: "local",
-    mirror: ["Not every entry has to be deep — you showed up.", memLine].filter(Boolean).join("\n\n"),
-    question: Math.random() < 0.2 ? "Want to add one detail that makes it feel more like today?" : undefined,
+    mirror: [
+      pick([
+        "Logged. I’m here with you.",
+        "Okay. I’m with you.",
+        "Got it. If you want, we can zoom in a little.",
+      ]),
+      memLine,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+    question: Math.random() < 0.35 ? "Want to add one detail that makes it feel more like today?" : undefined,
+    nudges:
+      Math.random() < 0.2
+        ? ["You can keep it simple: \"Today felt ___ because ___.\""]
+        : undefined,
   };
+  return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
 }
 
 export async function generateEnhancedReflection(
@@ -442,6 +605,8 @@ export async function generateEnhancedReflection(
 
   const tone = detectTone(cleaned);
   const topic = detectTopic(cleaned);
+  const tooTiredIntent = detectTooTired(cleaned);
+  const goodNothingNewIntent = detectGoodNothingNew(cleaned);
 
   const memoryContext = mem
     ? {
@@ -464,6 +629,8 @@ export async function generateEnhancedReflection(
   const topicDirectives = `
 Topic handling requirements:
 - If detectedTopic is "new_to_journaling": you MUST give actionable getting-started guidance (2–4 short lines) and include 1 gentle question. Do NOT reply with generic encouragement like “not every entry has to be deep.” The user is explicitly asking for help starting.
+- If intentTooTired is true: normalize it and offer a tiny (10–30 second) journaling option (2–3 concrete prompts). Ask 1 gentle question.
+- If intentGoodNothingNew is true and tone is positive: validate it as a small win (calm counts) and ask a small follow-up that fits.
 - If detectedTopic is "work": validate + name the likely stressor (schedule/pressure/time not feeling yours) and ask 1 next-step question that fits the entry.
 - If detectedTopic is "wins_gratitude": it’s OK to be short, and it’s OK to have no question.
 - If detectedTopic is "general" and tone is neutral: keep it light, but still respond to what they actually said (no template filler).
@@ -491,6 +658,8 @@ ${safetyHint}
 Context:
 - detectedTone: ${tone}
 - detectedTopic: ${topic}
+- intentTooTired: ${tooTiredIntent}
+- intentGoodNothingNew: ${goodNothingNewIntent}
 - memory: ${JSON.stringify(memoryContext)}
 
 User entry:
@@ -570,12 +739,16 @@ Return ONLY JSON (no markdown, no commentary):
       parsed.nudges === null
         ? undefined
         : Array.isArray(parsed.nudges)
-        ? parsed.nudges.filter((x: any) => typeof x === "string").slice(0, 3)
+        ? parsed.nudges
+            .filter((x: any) => typeof x === "string")
+            .map((x: string) => x.trim())
+            .filter(Boolean)
+            .slice(0, 3)
         : undefined;
 
     if (!mirror) return generateLocalReflection(cleaned, mem);
 
-    return { mode: "enhanced", mirror, question, nudges };
+    return { mode: "enhanced", mirror: ensureSafetyNote(mirror, cleaned), question, nudges };
   } catch {
     return generateLocalReflection(cleaned, mem);
   } finally {

@@ -266,9 +266,6 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
 
   const modeLabel = privacyMode ? "Private (local)" : "Enhanced (LLM)";
 
-  const headerLine = "A gentle place to think out loud.";
-  const subLine = "Start messy — I’ll help you untangle it.";
-
   const editorModeLabel = editingEntryId ? "Editing entry" : "New entry";
   const reflectHint = editingEntryId
     ? "Update & Reflect will refresh the reflection for this day."
