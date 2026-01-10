@@ -2,8 +2,8 @@ import type { UserMemory } from "../types/memory";
 
 export type ReflectionOutput = {
   mirror: string;
-  question?: string; // optional now
-  nudges?: string[]; // optional now
+  question?: string;
+  nudges?: string[];
   mode: "local" | "enhanced";
 };
 
@@ -35,38 +35,95 @@ function looksLikeSelfHarm(text: string) {
 }
 
 type Tone = "positive" | "negative" | "mixed" | "neutral";
-type Topic = "food" | "work" | "school" | "relationships" | "health" | "new_to_journaling" | "mental_wellness" | "general";
+type Topic =
+  | "work"
+  | "new_to_journaling"
+  | "mental_wellness"
+  | "relationships"
+  | "decisions"
+  | "anxiety_rumination"
+  | "wins_gratitude"
+  | "food"
+  | "school"
+  | "health"
+  | "general";
 
 function detectTone(text: string): Tone {
   const t = text.toLowerCase();
 
-  const pos = /\b(happy|excited|grateful|proud|relieved|good|great|amazing|fun|nice|love|win|won)\b/.test(t);
-  const neg = /\b(sad|down|anxious|panic|worry|angry|mad|overwhelm|exhausted|burnt|stress|frustrat|tired|avoid)\b/.test(t);
+  const pos =
+    /\b(happy|excited|grateful|thankful|proud|relieved|good|great|amazing|fun|nice|love|win|won|blessed)\b/.test(
+      t
+    );
+
+  const neg =
+    /\b(sad|down|anxious|panic|worry|worried|angry|mad|overwhelm|exhausted|burnt|stress|stressed|frustrat|tired|avoid|worst|miserable|hate|spiral|overthink)\b/.test(
+      t
+    ) || /\bno time\b/.test(t);
 
   if (pos && neg) return "mixed";
   if (pos) return "positive";
   if (neg) return "negative";
-
   return "neutral";
 }
 
 function detectTopic(text: string): Topic {
   const t = text.toLowerCase();
 
-  // New to journaling / onboarding
-  if (/\b(where do i start|how do i start|new to journaling|dont know where to start|i don'?t know where to start)\b/.test(t)) {
+  // New to journaling
+  if (
+    /\b(where do i start|how do i start|dont know where to start|i don'?t know where to start|where should i even start|where should i start)\b/.test(
+      t
+    ) ||
+    /\b(want(ing)? to document my thoughts)\b/.test(t) ||
+    /\b(just want a place to start)\b/.test(t
+    )
+  ) {
     return "new_to_journaling";
   }
 
   // Mental wellness / patterns
-  if (/\b(mental health|state of mind|anger|attachment|childhood trauma|trauma|avoidant|anxious|pattern|why am i like this)\b/.test(t)) {
+  if (
+    /\b(mental health|state of mind|anger|attachment|childhood trauma|trauma|avoidant|anxious attachment|pattern|why am i)\b/.test(
+      t
+    )
+  ) {
     return "mental_wellness";
   }
 
+  // Work
+  if (/\b(boss|work|job|meeting|deadline|on-call|shift|coworker|manager|client|clients|call)\b/.test(t)) {
+    return "work";
+  }
+
+  // Relationships
+  if (
+    /\b(friend|friends|family|partner|relationship|dating|breakup|lonely|alone|argue|fight|conflict|roommate)\b/.test(t)
+  ) {
+    return "relationships";
+  }
+
+  // Decisions / uncertainty
+  if (
+    /\b(decide|decision|choose|choice|torn|unsure|uncertain|regret|should i|what if|stuck between)\b/.test(t)
+  ) {
+    return "decisions";
+  }
+
+  // Anxiety / rumination
+  if (
+    /\b(overthink|spiral|ruminat|intrusive thoughts|can'?t stop thinking|looping|catastroph)\b/.test(t)
+  ) {
+    return "anxiety_rumination";
+  }
+
+  // Wins / gratitude
+  if (/\b(grateful|thankful|small win|proud of|celebrat|went well|good news)\b/.test(t)) {
+    return "wins_gratitude";
+  }
+
   if (/\b(ate|eating|dinner|lunch|breakfast|restaurant|food)\b/.test(t)) return "food";
-  if (/\b(boss|work|job|meeting|deadline|on-call|shift|coworker|manager|client)\b/.test(t)) return "work";
   if (/\b(homework|assignment|exam|quiz|class|school|study|professor)\b/.test(t)) return "school";
-  if (/\b(friend|friends|family|partner|relationship|dating|roommate)\b/.test(t)) return "relationships";
   if (/\b(sleep|rest|sick|headache|energy|gym|workout|run|walk)\b/.test(t)) return "health";
 
   return "general";
@@ -75,21 +132,21 @@ function detectTopic(text: string): Topic {
 function maybeMemoryLine(mem: UserMemory | undefined, tone: Tone, topic: Topic): string | null {
   if (!mem) return null;
 
-  // Demo-friendly but not spammy
+  // subtle but demo-visible
   const show = Math.random() < 0.33;
   if (!show) return null;
 
   if ((tone === "negative" || tone === "mixed") && mem.coping.length) {
     return pick([
       `Small thing I’m remembering: you’ve said **${mem.coping[0]}** can help sometimes. Does that feel true today, or not really?`,
-      `You’ve mentioned **${mem.coping[0]}** helping before — not as a fix, just as a small reset. Keep it as an option.`,
+      `You’ve mentioned **${mem.coping[0]}** helping before — not as a fix, just as a small reset.`,
     ]);
   }
 
   if (tone === "positive" && mem.likes.length) {
     return pick([
-      `This kind of reminds me of what you said about **${mem.likes[0]}** — those “simple good” moments matter.`,
       `Tiny callback: you’ve mentioned you like **${mem.likes[0]}** — today has a similar calm vibe.`,
+      `This kind of reminds me of what you said about **${mem.likes[0]}** — small joys count.`,
     ]);
   }
 
@@ -103,70 +160,17 @@ function maybeMemoryLine(mem: UserMemory | undefined, tone: Tone, topic: Topic):
   return null;
 }
 
-function localPositive(text: string, topic: Topic, memLine: string | null): ReflectionOutput {
-  const lower = text.toLowerCase();
-  const hasFriends = /\bfriends?\b/.test(lower);
-  const hasEat = /\b(ate|eating|restaurant|dinner|lunch)\b/.test(lower);
+// Detect “I already answered the question” patterns
+function extractAnsweredDrainingPart(text: string): string | null {
+  const t = text.toLowerCase();
+  const m = t.match(/(the most draining.*?is|most draining.*?is|it'?s the).*?(\.|$)/);
+  if (!m) return null;
 
-  // IMPORTANT: never inject "yummy/delicious" unless user said it
-  const mirror1 = hasFriends
-    ? pick([
-        "That sounds genuinely nice — catching up with friends can be one of those quiet resets.",
-        "Aw, that’s a good kind of day. It’s easy to forget how much a friend catch-up can refill you.",
-        "Love this. It sounds like you needed that time with people who feel familiar.",
-      ])
-    : pick([
-        "That sounds like a quietly good day — the kind that doesn’t need analyzing.",
-        "This feels like a breath of fresh air. Let yourself keep it simple.",
-        "I’m glad you captured this. It’s easy to forget the good stuff if you don’t write it down.",
-      ]);
-
-  const mirror2 =
-    hasEat && hasFriends
-      ? pick([
-          "Also: going out to eat is such an underrated way to reconnect. The ‘doing something’ makes talking easier.",
-          "There’s something about sharing a meal that makes it feel real again.",
-          "That kind of simple plan is honestly a win: people + food + no pressure.",
-        ])
-      : hasEat
-      ? pick([
-          "A good meal can change the whole texture of a day.",
-          "Sometimes the journal is just: I took care of myself a little.",
-          "I like that you noticed the day felt good without forcing it to be deep.",
-        ])
-      : pick([
-          "If you want, you could write one detail you don’t want to forget.",
-          "This feels like something future-you would be happy to reread.",
-          "Let this one count. You’re allowed to have a good day and just… keep it.",
-        ]);
-
-  // Positive entries often do NOT need a question
-  const includeQuestion = Math.random() < 0.35;
-  const question = includeQuestion
-    ? (hasFriends
-        ? pick([
-            "What was the best part — the people, the conversation, or just feeling connected again?",
-            "Did anything surprise you about how it felt to see them again?",
-          ])
-        : pick([
-            "What do you want to remember about today a month from now?",
-            "What helped today feel better than usual?",
-          ]))
-    : undefined;
-
-  const nudges = Math.random() < 0.25
-    ? pick([
-        ["Write one line: “Today felt like…”"],
-        ["Save one tiny detail (a quote, a place, a moment)."],
-      ])
-    : undefined;
-
-  return {
-    mode: "local",
-    mirror: [mirror1, mirror2, memLine].filter(Boolean).join("\n\n"),
-    question,
-    nudges,
-  };
+  // grab a short slice of the original (not lowercased) for nicer echo
+  const idx = t.indexOf(m[0]);
+  if (idx === -1) return "that part about your time not feeling like yours";
+  const originalSlice = text.slice(idx, Math.min(text.length, idx + 140)).trim();
+  return originalSlice.length ? originalSlice : "that part about your time not feeling like yours";
 }
 
 function localNewToJournaling(memLine: string | null): ReflectionOutput {
@@ -177,8 +181,8 @@ function localNewToJournaling(memLine: string | null): ReflectionOutput {
   ]);
 
   const question = pick([
+    "What do you want most right now: to vent, to understand a pattern, or to calm down?",
     "Do you want to start with what happened today, what you’re feeling, or what you’ve been carrying lately?",
-    "If you had to pick one: are you here to vent, to understand patterns, or to calm down?",
   ]);
 
   const nudges = pick([
@@ -193,12 +197,7 @@ function localNewToJournaling(memLine: string | null): ReflectionOutput {
     ],
   ]);
 
-  return {
-    mode: "local",
-    mirror: [mirror, memLine].filter(Boolean).join("\n\n"),
-    question,
-    nudges,
-  };
+  return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), question, nudges };
 }
 
 function localMentalWellness(memLine: string | null): ReflectionOutput {
@@ -231,63 +230,44 @@ function localMentalWellness(memLine: string | null): ReflectionOutput {
     ],
   ]);
 
-  return {
-    mode: "local",
-    mirror: [mirror1, mirror2, memLine].filter(Boolean).join("\n\n"),
-    question,
-    nudges,
-  };
+  return { mode: "local", mirror: [mirror1, mirror2, memLine].filter(Boolean).join("\n\n"), question, nudges };
 }
 
-function localNegative(text: string, topic: Topic, memLine: string | null): ReflectionOutput {
-  const mirror1 =
-    topic === "work"
-      ? pick([
-          "That sounds exhausting in a very specific way — not just the workload, but how last-minute it all is.",
-          "Oof. When work suddenly takes your time like that, it can feel like your life isn’t yours.",
-          "That’s draining. Especially when it collides with plans and rest you were counting on.",
-        ])
-      : pick([
-          "That sounds like a lot to sit with.",
-          "I’m really glad you put this somewhere — this kind of day deserves a place to land.",
-          "That makes sense. You’re not being dramatic.",
-        ]);
+function localWorkStress(text: string, memLine: string | null): ReflectionOutput {
+  const answered = extractAnsweredDrainingPart(text);
 
-  const mirror2 =
-    topic === "work"
-      ? pick([
-          "I’m hearing two layers: the schedule stress, and the feeling of your time not being respected.",
-          "It’s not just the tasks — it’s the constant “drop everything” energy.",
-        ])
-      : pick([
-          "If we zoom in: what part stung the most — what happened, or what it *meant*?",
-          "It sounds like you needed a break, and the day didn’t cooperate.",
-        ]);
+  const mirror1 = pick([
+    "Yeah… that sounds brutal. It’s not just “busy” — it’s the kind of day that leaves no room to breathe.",
+    "That’s a lot. When your whole day is calls + meetings + clients, it can feel like you don’t exist outside of work.",
+    "I get why you’d feel like you’re putting too much into work. That reads like constant output with no refill.",
+  ]);
 
-  const question =
-    topic === "work"
-      ? pick([
-          "Do you feel more tired from the hours, or from the lack of control?",
-          "If you had to name the boundary that got crossed — time, notice, or respect?",
-        ])
-      : pick([
-          "What would feel like a *tiny* relief tonight — even 5%?",
-          "What do you wish someone understood about how this feels?",
-        ]);
+  const mirror2 = answered
+    ? `And you naming it — ${answered} — honestly makes total sense. That’s a really specific kind of draining.`
+    : pick([
+        "Also, the “eh whatever” at the end feels like your brain trying to shut it down just to get through it.",
+        "That “eh whatever” feels like fatigue talking — like you’re trying not to feel the whole thing at once.",
+      ]);
 
-  const nudges = Math.random() < 0.55
+  // If they already answered “what’s most draining”, don’t ask it again—move forward.
+  const question = answered
     ? pick([
-        [
-          "Write 2 bullets: what you can control vs what you can’t.",
-          "Finish: “What I needed in that moment was…”",
-        ],
-        [
-          "Name one feeling + one need (example: ‘frustrated + rest’).",
-          "Write one sentence you’d say to a friend in the same situation.",
-        ],
-        ["If you want, list 2 changes that would make work feel 10% more sustainable."],
+        "What would a *realistic* boundary look like here — even a small one you could hold this week?",
+        "If you could change one thing that protects your time, what’s the most doable change?",
       ])
-    : undefined;
+    : pick([
+        "What part of this is most draining — the schedule, the pressure, or the feeling that your time isn’t yours?",
+        "If you could change one thing about your work week right now, what would give you the biggest relief?",
+      ]);
+
+  const nudges =
+    Math.random() < 0.6
+      ? pick([
+          ["Name one boundary you wish you had today (time, scope, availability)."],
+          ["Write one sentence: “What I need more of is ___.”", "And one: “What I need less of is ___.”"],
+          ["Quick check: what’s one small thing you can do tonight that belongs to *you*?"],
+        ])
+      : undefined;
 
   const safety =
     looksLikeSelfHarm(text)
@@ -302,27 +282,97 @@ function localNegative(text: string, topic: Topic, memLine: string | null): Refl
   };
 }
 
-function localNeutral(topic: Topic, memLine: string | null): ReflectionOutput {
+function localRelationships(text: string, memLine: string | null): ReflectionOutput {
   const mirror = pick([
-    "Not every entry needs to be deep — I like that you captured this.",
-    "This feels like a simple check-in. That’s valid journaling too.",
-    "Low-stakes entries are underrated. They keep the habit alive.",
+    "Relationship stuff hits different because it’s not just the event — it’s what it says about closeness, trust, or being understood.",
+    "I hear the tension here. It sounds like part of you wants connection, and another part wants distance.",
+    "That sounds emotionally loud — like it’s taking up space even when you’re trying not to think about it.",
   ]);
 
-  const includeQuestion = Math.random() < 0.2;
-  const question = includeQuestion
-    ? pick([
-        "Want to add one detail that makes this feel more like today?",
-        "If you had to add one emotion to this entry, what would it be?",
-      ])
-    : undefined;
+  const question = pick([
+    "What’s the part that’s hardest to say out loud — what happened, or what you’re afraid it means?",
+    "If you had to name what you needed in that moment, what was it — reassurance, space, respect, honesty?",
+  ]);
 
-  return {
-    mode: "local",
-    mirror: [mirror, memLine].filter(Boolean).join("\n\n"),
-    question,
-    nudges: undefined,
-  };
+  const nudges = Math.random() < 0.5 ? pick([
+    ["Write one sentence you *wish* you could say to them (you don’t have to send it)."],
+    ["Two bullets: what you want from them / what you want for yourself."],
+  ]) : undefined;
+
+  return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), question, nudges };
+}
+
+function localDecisions(memLine: string | null): ReflectionOutput {
+  const mirror = pick([
+    "Big decisions feel heavy because you’re choosing a future — and closing other doors at the same time.",
+    "Being torn usually means both options matter to you in different ways. That’s not indecision — that’s values clashing.",
+    "We can slow it down. Clarity usually comes from naming what you’re optimizing for.",
+  ]);
+
+  const question = pick([
+    "If you chose option A, what would you gain — and what would you quietly lose?",
+    "What are you optimizing for right now: peace, growth, money, time, or belonging?",
+  ]);
+
+  const nudges = Math.random() < 0.5 ? pick([
+    ["Write 2 columns: “what I know” vs “what I’m assuming.”"],
+    ["Finish: “The option that scares me more is ___ because ___.”"],
+  ]) : undefined;
+
+  return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), question, nudges };
+}
+
+function localAnxiety(memLine: string | null): ReflectionOutput {
+  const mirror = pick([
+    "That sounds like your brain is looping — like it won’t let the thought set down.",
+    "Overthinking usually means you care, and you don’t feel fully safe with uncertainty right now.",
+    "That spiral feeling is exhausting. You’re not weak for getting stuck in it.",
+  ]);
+
+  const question = pick([
+    "What’s the one fear underneath the loop — the thing your brain keeps trying to prevent?",
+    "If you zoom out: is this a problem you can solve, or a feeling you need to sit with for a moment?",
+  ]);
+
+  const nudges = Math.random() < 0.55 ? pick([
+    ["Write: “The story my anxiety is telling is…” then “The evidence I have is…”"],
+    ["Set a 2-minute timer and brain-dump every thought. No punctuation needed."],
+  ]) : undefined;
+
+  return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), question, nudges };
+}
+
+function localWins(memLine: string | null): ReflectionOutput {
+  const mirror = pick([
+    "This is worth holding onto. Wins don’t have to be dramatic to count.",
+    "I love that you noticed this. That’s how you build a record of what actually works for you.",
+    "That’s a real bright spot. Let it land.",
+  ]);
+
+  const includeQuestion = Math.random() < 0.35;
+  const question = includeQuestion ? pick([
+    "What did you do that helped make this happen?",
+    "What do you want future-you to remember about this moment?",
+  ]) : undefined;
+
+  const nudges = Math.random() < 0.25 ? ["Write one line: “I’m proud that I…”"] : undefined;
+
+  return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), question, nudges };
+}
+
+function localFoodPositive(text: string, memLine: string | null): ReflectionOutput {
+  const lower = text.toLowerCase();
+  const userSaidYummy = /\b(yummy|delicious|tasty)\b/.test(lower);
+
+  const mirror = pick([
+    "Honestly, a good meal can change the whole day’s vibe.",
+    "I love when the journal is just: “that was nice.” Simple joys count.",
+    "That sounds like a small reset — the kind you actually feel in your body.",
+  ]);
+
+  const nudges = Math.random() < 0.25 ? [userSaidYummy ? "Write one line: “Today tasted like…”" : "Write one line: “Today felt like…”"] : undefined;
+
+  return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), nudges };
 }
 
 export function generateLocalReflection(entryText: string, mem?: UserMemory): ReflectionOutput {
@@ -344,11 +394,39 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
 
   if (topic === "new_to_journaling") return localNewToJournaling(memLine);
   if (topic === "mental_wellness") return localMentalWellness(memLine);
+  if (topic === "relationships") return localRelationships(cleaned, memLine);
+  if (topic === "decisions") return localDecisions(memLine);
+  if (topic === "anxiety_rumination") return localAnxiety(memLine);
+  if (topic === "wins_gratitude") return localWins(memLine);
 
-  if (tone === "positive") return localPositive(cleaned, topic, memLine);
-  if (tone === "negative" || tone === "mixed") return localNegative(cleaned, topic, memLine);
+  if (topic === "food" && tone === "positive") return localFoodPositive(cleaned, memLine);
 
-  return localNeutral(topic, memLine);
+  if (topic === "work" && (tone === "negative" || tone === "mixed")) return localWorkStress(cleaned, memLine);
+
+  if (tone === "positive") {
+    // generic positive fallback
+    return {
+      mode: "local",
+      mirror: ["That sounds like a good moment to keep.", memLine].filter(Boolean).join("\n\n"),
+      question: Math.random() < 0.3 ? "What part do you want to remember most?" : undefined,
+    };
+  }
+
+  if (tone === "negative" || tone === "mixed") {
+    return {
+      mode: "local",
+      mirror: ["That sounds heavy. I’m here with you in it.", memLine].filter(Boolean).join("\n\n"),
+      question: "What feels like the sharpest part of this?",
+      nudges: Math.random() < 0.4 ? ["Write one sentence: “What I needed was…”"] : undefined,
+    };
+  }
+
+  // neutral fallback
+  return {
+    mode: "local",
+    mirror: ["Not every entry has to be deep — you showed up.", memLine].filter(Boolean).join("\n\n"),
+    question: Math.random() < 0.2 ? "Want to add one detail that makes it feel more like today?" : undefined,
+  };
 }
 
 export async function generateEnhancedReflection(entryText: string, mem?: UserMemory): Promise<ReflectionOutput> {
@@ -361,10 +439,6 @@ export async function generateEnhancedReflection(entryText: string, mem?: UserMe
   const tone = detectTone(cleaned);
   const topic = detectTopic(cleaned);
 
-  const safetyHint = looksLikeSelfHarm(cleaned)
-    ? "If the entry implies self-harm or suicide intent, include a short supportive note and encourage reaching local crisis resources; in the U.S. mention 988. Do not be alarmist."
-    : "Avoid medical claims. Don’t diagnose.";
-
   const memoryContext = mem
     ? {
         coping: mem.coping.slice(0, 5),
@@ -374,19 +448,28 @@ export async function generateEnhancedReflection(entryText: string, mem?: UserMe
       }
     : { coping: [], likes: [], stressors: [], wins: [] };
 
+  const answeredHint = extractAnsweredDrainingPart(cleaned)
+    ? "The entry includes a direct answer to a previous question (e.g., “the most draining part is…”). Acknowledge it and move forward—do not re-ask."
+    : "No explicit answered-question patterns detected.";
+
+  const safetyHint = looksLikeSelfHarm(cleaned)
+    ? "If the entry implies self-harm or suicide intent, include a short supportive note and encourage reaching local crisis resources; in the U.S. mention 988. Do not be alarmist."
+    : "Avoid medical claims. Don’t diagnose.";
+
   const prompt = `
 You are a journaling companion that feels HUMAN and conversational — like a thoughtful friend who listens well.
 The user wants something they could use long-term, not a template.
 
-Critical rule:
-- DO NOT invent details, phrases, or vibes that the user did not say.
-  (Example: if they said "went out to eat", don't say "yummy/delicious" unless they used those words.)
-- Do NOT paraphrase their whole entry or say "You wrote:".
-- Avoid therapy clichés like "good job writing this down" unless truly appropriate.
-- It’s OK for the response to be only 2–3 sentences.
+Critical rules:
+- DO NOT invent details, phrases, or vibes the user didn’t say.
+- Do NOT paraphrase the whole entry or say “You wrote:”.
+- Avoid therapy clichés unless truly appropriate.
+- It’s OK to respond in only 2–3 sentences.
 - Question and nudges are optional and can be null.
-- If using memory, mention it naturally and not every time.
+- If the user already answers a question inside the entry, acknowledge it and build on it (don’t ignore it).
+- If using memory, do it naturally and not every time.
 
+Extra hint: ${answeredHint}
 ${safetyHint}
 
 Context:
@@ -397,7 +480,7 @@ Context:
 User entry:
 ${cleaned}
 
-Return JSON exactly:
+Return ONLY JSON:
 {
   "mirror": string,
   "question": string | null,
@@ -414,22 +497,29 @@ Return JSON exactly:
     body: JSON.stringify({
       model: "gpt-4o",
       input: prompt,
-      max_output_tokens: 600,
+      max_output_tokens: 650,
+      text: { format: { type: "json_object" } },
     }),
   });
 
   if (!res.ok) return generateLocalReflection(cleaned, mem);
 
-  const data = await res.json();
+  const data: any = await res.json();
 
-  const raw = JSON.stringify(data);
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) return generateLocalReflection(cleaned, mem);
+  const chunks: string[] = [];
+  const output = Array.isArray(data.output) ? data.output : [];
+  for (const item of output) {
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const c of content) {
+      if (typeof c?.text === "string") chunks.push(c.text);
+    }
+  }
+  const textOut = chunks.join("\n").trim();
+  if (!textOut) return generateLocalReflection(cleaned, mem);
 
   let parsed: any;
   try {
-    parsed = JSON.parse(raw.slice(start, end + 1));
+    parsed = JSON.parse(textOut);
   } catch {
     return generateLocalReflection(cleaned, mem);
   }
