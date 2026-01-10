@@ -10,5 +10,7 @@ export type JournalEntry = {
     mirror: string;
     question: string;
     nudges: string[];
+    // Optional for backward-compat with older saved reflections.
+    mode?: "local" | "enhanced";
   };
   

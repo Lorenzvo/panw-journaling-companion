@@ -4,15 +4,18 @@ import { Card } from "../components/Card";
 import { loadEntries } from "../lib/storage";
 import { loadMemory } from "../lib/memory";
 import { cn, formatDateLong } from "../lib/utils";
+import type { JournalEntry } from "../types/journal";
 import {
   buildMoodTimeline,
   extractThemes,
   whatHelped,
   buildWeeklySummary,
   sentimentEmoji,
+  sentimentLabelTitle,
+  explainDayMood,
   type Theme,
   type MoodPoint,
-} from "../lib/insights";
+} from "../lib/insights/index";
 
 function Sparkline({ values }: { values: number[] }) {
   const w = 220;
@@ -28,14 +31,130 @@ function Sparkline({ values }: { values: number[] }) {
     return h - pad - t * (h - pad * 2);
   };
 
-  const pts = values.map((v, i) => `${scaleX(i)},${scaleY(v)}`).join(" ");
+  const pts = values.map((v, i) => ({ x: scaleX(i), y: scaleY(v) }));
+
+  const pathD = (() => {
+    if (pts.length === 0) return "";
+    if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+
+    // Catmull-Rom to Bezier for a smoother sparkline.
+    const d: string[] = [`M ${pts[0].x} ${pts[0].y}`];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i - 1)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(pts.length - 1, i + 2)];
+
+      const c1x = p1.x + (p2.x - p0.x) / 6;
+      const c1y = p1.y + (p2.y - p0.y) / 6;
+      const c2x = p2.x - (p3.x - p1.x) / 6;
+      const c2y = p2.y - (p3.y - p1.y) / 6;
+      d.push(`C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`);
+    }
+    return d.join(" ");
+  })();
+
+  const last = pts[pts.length - 1];
 
   return (
     <svg width={w} height={h} className="overflow-visible">
-      <polyline points={pts} fill="none" strokeWidth="2" className="stroke-slate-900/70" />
-      <line x1={pad} y1={h / 2} x2={w - pad} y2={h / 2} className="stroke-slate-200" strokeWidth="1" />
+      <path d={pathD} fill="none" strokeWidth="2.25" className="stroke-slate-900/70" strokeLinecap="round" />
+      {last ? <circle cx={last.x} cy={last.y} r={2.25} className="fill-slate-900/70" /> : null}
     </svg>
   );
+}
+
+function ThemeIcon({ id }: { id: string }) {
+  const base = "h-4 w-4 text-slate-900";
+  switch (id) {
+    case "relationships":
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 21s-7-4.35-9.5-8.5C.5 8.5 3 6 6 6c2 0 3.5 1.2 6 3.5C14.5 7.2 16 6 18 6c3 0 5.5 2.5 3.5 6.5C19 16.65 12 21 12 21z" />
+        </svg>
+      );
+    case "work":
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 7V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1" />
+          <path d="M4 7h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" />
+          <path d="M9 12h6" />
+        </svg>
+      );
+    case "selfcare":
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 21s-6-3.5-8-7.5C2.2 10 4 7.5 7 7.5c1.7 0 3.1 1 5 2.8 1.9-1.8 3.3-2.8 5-2.8 3 0 4.8 2.5 3 6-2 4-8 7.5-8 7.5z" />
+        </svg>
+      );
+    case "sleep":
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.5A8.5 8.5 0 1 1 11.5 3a6.5 6.5 0 1 0 9.5 9.5z" />
+        </svg>
+      );
+    case "finances":
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 1v22" />
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
+      );
+    case "selfworth":
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 21s-7-4.35-9.5-8.5C.5 8.5 3 6 6 6c2 0 3.5 1.2 6 3.5C14.5 7.2 16 6 18 6c3 0 5.5 2.5 3.5 6.5C19 16.65 12 21 12 21z" />
+          <path d="M9.5 10.5l5 5" />
+          <path d="M14.5 10.5l-5 5" />
+        </svg>
+      );
+    case "hobbies":
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7 3h10v18H7z" />
+          <path d="M7 7h10" />
+          <path d="M10 3v18" />
+        </svg>
+      );
+    case "outdoors":
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 20h18" />
+          <path d="M6 20l6-14 6 14" />
+          <path d="M10 13h4" />
+        </svg>
+      );
+    case "pets":
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 19c-3 0-5-2-5-4 0-1.5 1-3 2.5-3.5" />
+          <path d="M12 19c3 0 5-2 5-4 0-1.5-1-3-2.5-3.5" />
+          <path d="M9.5 10.5c-.8 0-1.5-.7-1.5-1.5S8.7 7.5 9.5 7.5 11 8.2 11 9s-.7 1.5-1.5 1.5z" />
+          <path d="M14.5 10.5c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5S16 8.2 16 9s-.7 1.5-1.5 1.5z" />
+          <path d="M12 14.5c1 0 2 .7 2 1.5s-1 2-2 2-2-1.2-2-2 .9-1.5 2-1.5z" />
+        </svg>
+      );
+    case "therapy":
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+        </svg>
+      );
+    case "faith":
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2v20" />
+          <path d="M6 7h12" />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 24 24" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8 12h8" />
+        </svg>
+      );
+  }
 }
 
 function ThemeCard({
@@ -59,7 +178,10 @@ function ThemeCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-slate-900">{theme.label}</div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <ThemeIcon id={theme.id} />
+            <span>{theme.label}</span>
+          </div>
           <div className="text-xs text-slate-600">{theme.score} mention(s)</div>
         </div>
         <div className="text-xs text-slate-500">{expanded ? "Hide" : "Details"}</div>
@@ -82,7 +204,7 @@ function ThemeCard({
   );
 }
 
-function entriesForDay(entries: { createdAt: string; text: string }[], dateKey: string) {
+function entriesForDay(entries: JournalEntry[], dateKey: string) {
   return entries.filter((e) => e.createdAt.slice(0, 10) === dateKey);
 }
 
@@ -104,13 +226,15 @@ export function InsightsPage() {
   const [expandedThemeId, setExpandedThemeId] = useState<string | null>(null);
   const [activeDay, setActiveDay] = useState<MoodPoint | null>(null);
 
-  const activeDayEntries = useMemo(() => {
-    if (!activeDay) return [];
-    const list = entriesForDay(entries, activeDay.dateKey);
-    return list.slice(0, 6).map((e) => ({
-      when: new Date(e.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-      text: e.text.trim().replace(/\s+/g, " "),
-    }));
+  const activeDayEntriesCount = useMemo(() => {
+    if (!activeDay) return 0;
+    return entriesForDay(entries, activeDay.dateKey).length;
+  }, [activeDay, entries]);
+
+  const activeDayWhy = useMemo(() => {
+    if (!activeDay) return null;
+    const dayEntries = entriesForDay(entries, activeDay.dateKey);
+    return explainDayMood(dayEntries, activeDay);
   }, [activeDay, entries]);
 
   return (
@@ -134,14 +258,12 @@ export function InsightsPage() {
         </Card>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-min">
             <Card className="p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-sm font-semibold text-slate-900">Mood over time</div>
-                  <div className="mt-1 text-xs text-slate-600">
-                    Last 14 days · A lightweight tone trend (not a diagnosis)
-                  </div>
+                  <div className="mt-1 text-xs text-slate-600">Last 14 days · A lightweight tone trend (not a diagnosis)</div>
                 </div>
                 <div
                   className={cn(
@@ -150,7 +272,7 @@ export function InsightsPage() {
                   )}
                   title="Today’s vibe estimate"
                 >
-                  {sentimentEmoji(latest.label)} <span className="ml-1 capitalize">{latest.label}</span>
+                  {sentimentEmoji(latest.label)} <span className="ml-1 capitalize">{sentimentLabelTitle(latest.label)}</span>
                 </div>
               </div>
 
@@ -163,9 +285,7 @@ export function InsightsPage() {
                       ? `Based on ${latest.count} entr${latest.count === 1 ? "y" : "ies"} today.`
                       : "No entry today. Trend carries forward."}
                   </div>
-                  <div className="mt-2">
-                    Tip: click a day below to see the entries that contributed to it.
-                  </div>
+                  <div className="mt-2">Tip: click a day below for a quick “why this mood” read.</div>
                 </div>
               </div>
 
@@ -200,7 +320,7 @@ export function InsightsPage() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-semibold text-slate-900">
                       {activeDay.dateKey} · {sentimentEmoji(activeDay.label)}{" "}
-                      <span className="capitalize">{activeDay.label}</span>
+                      <span className="capitalize">{sentimentLabelTitle(activeDay.label)}</span>
                     </div>
                     <button
                       type="button"
@@ -211,16 +331,17 @@ export function InsightsPage() {
                     </button>
                   </div>
 
-                  {activeDayEntries.length === 0 ? (
+                  {activeDayEntriesCount === 0 ? (
                     <div className="mt-2 text-xs text-slate-600">No entries saved that day.</div>
                   ) : (
                     <div className="mt-2 space-y-2">
-                      {activeDayEntries.map((e, i) => (
-                        <div key={i} className="rounded-xl border border-slate-200 bg-white/80 p-2">
-                          <div className="text-[11px] text-slate-500">{e.when}</div>
-                          <div className="mt-1 text-xs text-slate-700 line-clamp-2">{e.text}</div>
+                      {activeDayWhy ? (
+                        <div className="rounded-xl border border-slate-200 bg-white/80 p-2">
+                          <div className="text-[11px] font-semibold text-slate-700">Why this mood</div>
+                          <div className="mt-1 text-xs text-slate-700 leading-relaxed whitespace-pre-line">{activeDayWhy.blurb}</div>
                         </div>
-                      ))}
+                      ) : null}
+
                       <div className="text-[11px] text-slate-500">
                         This is just a lens. If the “vibe” feels wrong, that’s useful feedback too.
                       </div>
@@ -232,21 +353,18 @@ export function InsightsPage() {
 
             <Card className="p-4">
               <div className="text-sm font-semibold text-slate-900">Weekly snapshot</div>
-              <div className="mt-1 text-xs text-slate-600">
-                A short summary that tries to reflect your week without over-reading it.
-              </div>
+              <div className="mt-1 text-xs text-slate-600">A short summary that tries to reflect your week without over-reading it.</div>
 
               <div className="mt-4 rounded-2xl bg-white/70 border border-slate-200 p-4">
                 <div className="text-base font-semibold text-slate-900">{weekly.headline}</div>
 
-                <p className="mt-2 text-sm text-slate-700 leading-relaxed">
-                  {weekly.sentencePrefix} <strong>{weekly.theme}</strong>. The overall tone felt{" "}
-                  <strong className="capitalize">{weekly.toneLabel}</strong>. {weekly.sentenceSuffix}
-                </p>
+                <p className="mt-2 text-sm text-slate-700 leading-relaxed">{weekly.summary}</p>
 
-                <ul className="mt-3 list-disc pl-5 text-sm text-slate-700 space-y-1">
+                <ul className="mt-3 list-disc pl-5 text-sm text-slate-700 space-y-2">
                   {weekly.bullets.map((b, i) => (
-                    <li key={i}>{b}</li>
+                    <li key={i} className="leading-relaxed">
+                      {b}
+                    </li>
                   ))}
                 </ul>
 
@@ -255,9 +373,7 @@ export function InsightsPage() {
                 </div>
               </div>
             </Card>
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -282,9 +398,7 @@ export function InsightsPage() {
                 )}
               </div>
 
-              <div className="mt-4 text-xs text-slate-600 leading-relaxed">
-                Themes are meant to be a mirror, not a verdict. If one feels off, that’s information.
-              </div>
+              <div className="mt-4 text-xs text-slate-600 leading-relaxed">Themes are meant to be a mirror, not a verdict. If one feels off, that’s information.</div>
             </Card>
 
             <Card className="p-4">
@@ -300,9 +414,7 @@ export function InsightsPage() {
                 ))}
               </div>
 
-              <div className="mt-4 text-xs text-slate-600">
-                If something stops being true, your journal will naturally correct it over time.
-              </div>
+              <div className="mt-4 text-xs text-slate-600">If something stops being true, your journal will naturally correct it over time.</div>
             </Card>
           </div>
         </>

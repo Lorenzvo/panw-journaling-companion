@@ -56,6 +56,8 @@ type Topic =
   | "new_to_journaling"
   | "mental_wellness"
   | "relationships"
+  | "self_worth"
+  | "finances"
   | "decisions"
   | "anxiety_rumination"
   | "wins_gratitude"
@@ -97,9 +99,12 @@ function detectTone(text: string): Tone {
     );
 
   const neg =
-    /\b(sad|down|anxious|panic|worry|worried|angry|mad|overwhelm|exhausted|burnt|stress|stressed|frustrat|tired|avoid|worst|miserable|hate|spiral|overthink)\b/.test(
+    /\b(sad|down|anxious|panic|worry|worried|angry|mad|overwhelm|exhausted|exhausting|burnt|burned out|drained|stress|stressed|frustrat|tired|avoid|awful|worst|miserable|hate|spiral|overthink|struggling|invasive|intrusive)\b/.test(
       t
-    ) || /\bno time\b/.test(t);
+    ) ||
+    /\bno time\b/.test(t) ||
+    /\b(last minute|deadline|overtime|weekend|midnight|back[- ]?to[- ]?back|nonstop|on[- ]?call)\b/.test(t) ||
+    /\b(everyone hates me|everybody hates me|they hate me|hate me)\b/.test(t);
 
   if (pos && neg) return "mixed";
   if (pos) return "positive";
@@ -126,6 +131,20 @@ function detectTopic(text: string): Topic {
     )
   ) {
     return "mental_wellness";
+  }
+
+  // Self-worth / social fear (keep this non-diagnostic and non-clinical)
+  if (
+    /\b(not good enough|worthless|failure|shame|guilt|hate myself|everyone hates me|everybody hates me|they hate me|hate me)\b/.test(
+      t
+    )
+  ) {
+    return "self_worth";
+  }
+
+  // Finances / stability
+  if (/\b(finance|finances|money|rent|debt|bills|paycheck|pay|broke|budget)\b/.test(t)) {
+    return "finances";
   }
 
   // Work
@@ -305,6 +324,68 @@ function localRelationshipsPositive(_text: string, memLine: string | null): Refl
   return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), question, nudges };
 }
 
+function localFinances(_text: string, memLine: string | null): ReflectionOutput {
+  const mirror = pick([
+    "Money stress can feel so loud because it touches safety. I’m sorry you’re carrying that today.",
+    "That sounds really heavy — finances have a way of sitting in the background of everything.",
+    "I hear the strain here. Money pressure can make even small things feel sharper.",
+  ]);
+
+  const question = pick([
+    "Is this more about the numbers right now, or the uncertainty of not knowing what’s next?",
+    "What’s the most immediate pressure — a bill, a deadline, or just the ongoing stress of it?",
+  ]);
+
+  const nudges = pick([
+    [
+      "Tiny step: write the next one thing you need to handle (just one).",
+      "Optional: what support would actually help — a plan, a conversation, or a little relief today?",
+    ],
+    [
+      "Two bullets: what’s urgent this week / what can wait until later.",
+      "If you want: one small action that might reduce stress by 5%.",
+    ],
+  ]);
+
+  return {
+    mode: "local",
+    mirror: [mirror, memLine].filter(Boolean).join("\n\n"),
+    question,
+    nudges: nudges.slice(0, 3),
+  };
+}
+
+function localSelfWorth(_text: string, memLine: string | null): ReflectionOutput {
+  const mirror = pick([
+    "That thought — that everyone hates you — is a really painful place to be. I’m glad you wrote it instead of keeping it sealed in.",
+    "I hear how harsh this feels. When your brain is telling you people hate you, it can make everything feel personal and heavy.",
+    "That’s a lot to sit with. Feeling disliked or unwanted can hit deeper than the situation itself.",
+  ]);
+
+  const question = pick([
+    "Did something specific happen that sparked that feeling today, or is it more of a general vibe?",
+    "When that thought shows up, what’s the most convincing ‘evidence’ your mind points to?",
+  ]);
+
+  const nudges = pick([
+    [
+      "Name one person you feel even 5% safer with — or write “none right now” (both are data).",
+      "Optional: what would you *want* to hear from someone if they understood how you feel?",
+    ],
+    [
+      "Try one line: “The story my brain is telling is…”",
+      "Then one line: “What I actually know for sure is…”",
+    ],
+  ]);
+
+  return {
+    mode: "local",
+    mirror: [mirror, memLine].filter(Boolean).join("\n\n"),
+    question,
+    nudges: nudges.slice(0, 3),
+  };
+}
+
 function localMentalWellness(memLine: string | null): ReflectionOutput {
   const mirror1 = pick([
     "I hear how confusing that feels — especially when the anger shows up without a clear reason.",
@@ -343,7 +424,7 @@ function localWorkStress(text: string, memLine: string | null): ReflectionOutput
 
   const mirror1 = pick([
     "Yeah… that sounds brutal. It’s not just “busy” — it’s the kind of day that leaves no room to breathe.",
-    "That’s a lot. When your whole day is calls + meetings + clients, it can feel like you don’t exist outside of work.",
+    "That’s a lot. When work expands into your personal time, it can start to feel like there’s no real ‘off’ switch.",
     "I get why you’d feel like you’re putting too much into work. That reads like constant output with no refill.",
   ]);
 
@@ -511,6 +592,14 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
 
   if (topic === "new_to_journaling") return localNewToJournaling(memLine);
   if (topic === "mental_wellness") return localMentalWellness(memLine);
+  if (topic === "self_worth") {
+    const out = localSelfWorth(cleaned, memLine);
+    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+  }
+  if (topic === "finances" && (tone === "negative" || tone === "mixed")) {
+    const out = localFinances(cleaned, memLine);
+    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+  }
   if (topic === "relationships" && tone === "positive") return localRelationshipsPositive(cleaned, memLine);
   if (topic === "relationships") return localRelationships(cleaned, memLine);
   if (topic === "decisions") return localDecisions(memLine);

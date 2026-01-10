@@ -176,6 +176,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
       // question/nudges are now optional — store empty string/[] when absent to keep types stable
       question: out.question ?? "",
       nudges: out.nudges ?? [],
+      mode: out.mode,
     };
 
     const nextReflections = [...reflections.filter((r) => r.entryId !== entryId), reflection];
@@ -233,6 +234,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
         mirror: out.mirror,
         question: out.question ?? "",
         nudges: out.nudges ?? [],
+        mode: out.mode,
       };
 
       setReflections((prev) => [...prev.filter((r) => r.entryId !== draftId), reflection]);
@@ -265,6 +267,13 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
   }
 
   const modeLabel = privacyMode ? "Private (local)" : "Enhanced (LLM)";
+
+  const reflectionModeLabel =
+    selectedReflection?.mode === "enhanced"
+      ? "Enhanced (LLM)"
+      : selectedReflection?.mode === "local"
+      ? "Private (local)"
+      : modeLabel;
 
   const editorModeLabel = editingEntryId ? "Editing entry" : "New entry";
   const reflectHint = editingEntryId
@@ -425,7 +434,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
             <div className="text-sm font-semibold text-slate-900">
               Reflection {selectedEntryId === "draft" ? "(draft)" : ""}
             </div>
-            <div className="text-xs text-slate-500">{modeLabel}</div>
+            <div className="text-xs text-slate-500">{reflectionModeLabel}</div>
           </div>
 
           <p className="mt-2 whitespace-pre-line text-sm text-slate-700 leading-relaxed">
