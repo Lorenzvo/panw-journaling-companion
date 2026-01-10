@@ -9,6 +9,8 @@ import { quoteOfTheDay } from "../lib/quote";
 import { generateLocalReflection, generateEnhancedReflection } from "../lib/reflection";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Trash2, PencilLine, Plus } from "lucide-react";
+import { TutorialModal } from "../components/TutorialModal";
+
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -24,6 +26,32 @@ const STARTER_CHIPS = [
 ];
 
 export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+
+  const tutorial = [
+    {
+      title: "A gentle place to think out loud",
+      body:
+        "This is journaling without pressure.\nWrite messy. Typos are fine. One sentence counts.",
+    },
+    {
+      title: "Save vs Reflect (what’s the difference?)",
+      body:
+        "• Save / Update stores your entry.\n• Reflect draft gives instant feedback without saving.\n• Save & Reflect (or Update & Reflect) saves and generates a reflection.",
+    },
+    {
+      title: "Privacy Mode",
+      body:
+        "Privacy Mode ON = local reflection in your browser.\nPrivacy Mode OFF = enhanced reflection using an LLM.\n(You’ll always get a reflection — it’ll just change how it’s generated.)",
+    },
+    {
+      title: "Make it yours over time",
+      body:
+        "Solace remembers gentle preferences (like coping tools that help you).\nIt should feel subtle — not intrusive.",
+    },
+  ];
+
   const [entries, setEntries] = useState<JournalEntry[]>(() => loadEntries());
   const [reflections, setReflections] = useState<Reflection[]>(() => loadReflections());
 
@@ -259,11 +287,37 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
         onConfirm={onConfirmDelete}
       />
 
+    <TutorialModal
+      open={showTutorial}
+      step={tutorialStep}
+      total={tutorial.length}
+      title={tutorial[tutorialStep].title}
+      body={tutorial[tutorialStep].body}
+      onPrev={() => setTutorialStep((s) => Math.max(0, s - 1))}
+      onNext={() => {
+        if (tutorialStep === tutorial.length - 1) setShowTutorial(false);
+        else setTutorialStep((s) => Math.min(tutorial.length - 1, s + 1));
+      }}
+      onClose={() => setShowTutorial(false)}
+    />
+
+
+    <div className="flex items-start justify-between gap-3">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Journal</h1>
-        <p className="text-slate-600">{todayLabel} · {headerLine}</p>
-        <p className="text-xs text-slate-500 mt-1">{subLine}</p>
+        <p className="text-slate-600">{todayLabel} · A gentle place to think out loud.</p>
+        <p className="text-xs text-slate-500 mt-1">Start messy — I’ll help you untangle it.</p>
       </div>
+
+      <button
+        type="button"
+        onClick={() => { setTutorialStep(0); setShowTutorial(true); }}
+        className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+      >
+        Tutorial
+      </button>
+    </div>
+
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Card className="p-4">
