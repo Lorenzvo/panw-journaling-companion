@@ -3,6 +3,8 @@ import { Container } from "./Container";
 import { Toggle } from "./Toggle";
 import { cn } from "../lib/utils";
 import { Sparkles, NotebookPen, BarChart3, CalendarCheck } from "lucide-react";
+import { useState } from "react";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 export function AppShell({
   privacyMode,
@@ -13,8 +15,33 @@ export function AppShell({
   setPrivacyMode: (v: boolean) => void;
   children: React.ReactNode;
 }) {
+  const [confirmPrivacyOff, setConfirmPrivacyOff] = useState(false);
+
+  function requestToggle(next: boolean) {
+    // Confirm only when switching OFF privacy mode
+    if (privacyMode === true && next === false) {
+      setConfirmPrivacyOff(true);
+      return;
+    }
+    setPrivacyMode(next);
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-rose-50 via-sky-50 to-white">
+      <ConfirmDialog
+        open={confirmPrivacyOff}
+        title="Turn off Privacy Mode?"
+        description="Enhanced reflections will use an external language model (LLM). In this prototype, that means your journal text may be sent to the API to generate a response. You can switch Privacy Mode back on anytime."
+        confirmText="Yes, use Enhanced mode"
+        cancelText="Keep Privacy Mode on"
+        tone="neutral"
+        onCancel={() => setConfirmPrivacyOff(false)}
+        onConfirm={() => {
+          setConfirmPrivacyOff(false);
+          setPrivacyMode(false);
+        }}
+      />
+
       <header className="sticky top-0 z-10 border-b border-slate-200/60 bg-white/60 backdrop-blur">
         <Container className="py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -26,19 +53,19 @@ export function AppShell({
                 Solace Journal
               </div>
               <div className="text-xs text-slate-600">
-                A gentle place to think out loud.
+                Start messy. I’ll help you untangle it.
               </div>
             </div>
           </div>
 
           <Toggle
             checked={privacyMode}
-            onChange={setPrivacyMode}
+            onChange={requestToggle}
             label="Privacy Mode"
             sublabel={
               privacyMode
-                ? "All analysis runs locally in your browser."
-                : "Optional enhanced insights can use an API later."
+                ? "All reflection runs locally in your browser."
+                : "Enhanced reflection uses an LLM (with a disclosure)."
             }
           />
         </Container>

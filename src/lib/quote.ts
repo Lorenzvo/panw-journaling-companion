@@ -1,13 +1,13 @@
 const LINES = [
-    "Write it badly. Keep it honest.",
-    "Clarity is allowed to be slow.",
-    "Start anywhere—your mind will follow.",
-    "No need to solve it. Just name it.",
-    "A small truth is still a truth.",
-    "You can be messy and still be making progress.",
-    "Let the page hold it for a minute.",
-    "What you feel counts, even if it’s complicated.",
+    "Start anywhere. Even one sentence counts.",
+    "Write it plainly. You can polish later.",
     "Notice what helped—even a little.",
+    "You’re allowed to feel two things at once.",
+    "Today doesn’t need a perfect summary.",
+    "Small honesty adds up.",
+    "If it’s messy, it’s still real.",
+    "A win can be quiet and still count.",
+    "Name the thing. Then breathe.",
   ];
   
   export function quoteOfTheDay(d = new Date()) {

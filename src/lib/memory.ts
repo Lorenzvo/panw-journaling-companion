@@ -1,7 +1,7 @@
 import type { JournalEntry } from "../types/journal";
 import type { UserMemory } from "../types/memory";
 
-const MEMORY_KEY = "solace_memory_v2";
+const MEMORY_KEY = "solace_memory_v3";
 
 const emptyMemory = (): UserMemory => ({
   coping: [],
@@ -18,21 +18,18 @@ function uniqPush(arr: string[], item: string, limit = 12) {
   return [cleaned, ...arr].slice(0, limit);
 }
 
-function extractCopingStatements(text: string) {
-  const lines: string[] = [];
-  const patterns = [
-    /(?:taking|going for|went on|a)\s+(a\s+)?walk\b.*?(?:helped|calmed|felt nice|felt better)/i,
-    /\b(?:walk|music|gym|workout|run|shower|bath|sleep|nap|breathing|meditat)\w*\b.*?(?:helped|calmed|grounded|felt better|made me feel)/i,
-    /(?:helps|helped|calmed|calms|grounds|grounded|made me feel better)\s+(?:me\s+)?(?:when|because)?\s*(.*)/i,
-    /(?:i wind down by|to wind down i|when i feel stressed i)\s*(.*)/i,
-  ];
+function canonicalCoping(textLower: string): string[] {
+  const out: string[] = [];
+  const add = (s: string) => out.push(s);
 
-  for (const re of patterns) {
-    const m = text.match(re);
-    if (m?.[0]) lines.push(m[0]);
-    else if (m?.[1]) lines.push(m[1]);
-  }
-  return lines;
+  if (/\bwalk\b|\bwalked\b|\bgoing for a walk\b/.test(textLower)) add("going on walks");
+  if (/\bgym\b|\bworkout\b|\brun\b|\byoga\b|\bexercise\b/.test(textLower)) add("getting some movement");
+  if (/\bmusic\b|\bplaylist\b|\bsong\b/.test(textLower)) add("listening to music");
+  if (/\bshower\b|\bbath\b/.test(textLower)) add("taking a shower/bath");
+  if (/\bsleep\b|\bnap\b|\brest\b/.test(textLower)) add("resting/sleep");
+  if (/\bbreath\b|\bbreathing\b|\bmeditat\b/.test(textLower)) add("breathing/meditation");
+
+  return out;
 }
 
 export function extractMemoryFromText(text: string, prev: UserMemory): UserMemory {
@@ -40,8 +37,10 @@ export function extractMemoryFromText(text: string, prev: UserMemory): UserMemor
   const t = text.trim();
   if (!t) return mem;
 
-  // Coping
-  for (const c of extractCopingStatements(t)) {
+  const lower = t.toLowerCase();
+
+  // Coping: capture canonical items (so callbacks sound natural)
+  for (const c of canonicalCoping(lower)) {
     mem.coping = uniqPush(mem.coping, c);
   }
 
@@ -79,7 +78,7 @@ export function saveMemory(mem: UserMemory) {
 
 export function buildMemoryFromEntries(entries: JournalEntry[]): UserMemory {
   let mem = emptyMemory();
-  for (const e of entries.slice(0, 30)) {
+  for (const e of entries.slice(0, 40)) {
     mem = extractMemoryFromText(e.text, mem);
   }
   return mem;

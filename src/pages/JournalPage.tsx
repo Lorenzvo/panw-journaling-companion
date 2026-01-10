@@ -6,21 +6,21 @@ import type { JournalEntry, Reflection } from "../types/journal";
 import { loadMemory, saveMemory, extractMemoryFromText, buildMemoryFromEntries } from "../lib/memory";
 import type { UserMemory } from "../types/memory";
 import { quoteOfTheDay } from "../lib/quote";
-import {
-  generateLocalReflection,
-  generateEnhancedReflection,
-} from "../lib/reflection";
+import { generateLocalReflection, generateEnhancedReflection } from "../lib/reflection";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { Trash2, PencilLine, Plus } from "lucide-react";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
 const STARTER_CHIPS = [
-  "I don’t know where to start. I just feel…",
-  "Today felt heavy because…",
-  "I keep thinking about…",
-  "Something that’s bothering me is…",
-  "If I’m honest, I’ve been avoiding…",
+  "Quick recap: today I…",
+  "One thing that went well was…",
+  "Something I’m looking forward to is…",
+  "Something that annoyed me was…",
+  "A small win I want to remember is…",
+  "Right now I feel…",
 ];
 
 export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
@@ -37,25 +37,59 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     return m;
   });
 
+  // editor state
   const [text, setText] = useState("");
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null); // null = new entry
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
   const [reflecting, setReflecting] = useState(false);
   const [reflectError, setReflectError] = useState<string | null>(null);
 
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
   const todayLabel = useMemo(() => formatDateLong(new Date()), []);
+  const hasDraft = text.trim().length > 0;
+
   const selectedReflection = useMemo(() => {
     if (!selectedEntryId) return null;
     return reflections.find((r) => r.entryId === selectedEntryId) ?? null;
   }, [reflections, selectedEntryId]);
 
+  function persistAll(nextEntries: JournalEntry[], nextReflections: Reflection[]) {
+    setEntries(nextEntries);
+    saveEntries(nextEntries);
+
+    setReflections(nextReflections);
+    saveReflections(nextReflections);
+
+    const rebuilt = buildMemoryFromEntries(nextEntries);
+    setMemory(rebuilt);
+    saveMemory(rebuilt);
+  }
+
   function onUseChip(chip: string) {
     setText((prev) => (prev.trim().length ? prev : chip));
   }
 
-  function onSave() {
+  function startNewEntry() {
+    setEditingEntryId(null);
+    setSelectedEntryId(null);
+    setText("");
+    setReflectError(null);
+  }
+
+  function beginEdit(entryId: string) {
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry) return;
+    setEditingEntryId(entry.id);
+    setSelectedEntryId(entry.id);
+    setText(entry.text);
+    setReflectError(null);
+  }
+
+  function saveNewEntry(): JournalEntry | null {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed) return null;
 
     const entry: JournalEntry = {
       id: uid(),
@@ -63,78 +97,172 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
       text: trimmed,
     };
 
-    const next = [entry, ...entries];
-    setEntries(next);
-    saveEntries(next);
+    const nextEntries = [entry, ...entries];
+    setEntries(nextEntries);
+    saveEntries(nextEntries);
 
     const nextMem = extractMemoryFromText(trimmed, memory);
     setMemory(nextMem);
     saveMemory(nextMem);
 
     setSelectedEntryId(entry.id);
-    setText("");
+    setEditingEntryId(entry.id);
+    setText(trimmed); // keep it in editor so they can keep editing if they want
+    return entry;
   }
 
-  async function onReflect() {
+  function updateExistingEntry(entryId: string): JournalEntry | null {
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+
+    const idx = entries.findIndex((e) => e.id === entryId);
+    if (idx === -1) return null;
+
+    const updated: JournalEntry = {
+      ...entries[idx],
+      text: trimmed,
+    };
+
+    const nextEntries = [...entries];
+    nextEntries[idx] = updated;
+
+    // Remove reflection for this entry (stale) until re-run
+    const nextReflections = reflections.filter((r) => r.entryId !== entryId);
+
+    persistAll(nextEntries, nextReflections);
+
+    setSelectedEntryId(entryId);
+    setEditingEntryId(entryId);
+    return updated;
+  }
+
+  async function reflectOnText(entryId: string, entryText: string) {
+    const out = privacyMode
+      ? generateLocalReflection(entryText, memory)
+      : await generateEnhancedReflection(entryText, memory);
+
+    const reflection: Reflection = {
+      entryId,
+      createdAt: new Date().toISOString(),
+      mirror: out.mirror,
+      // question/nudges are now optional — store empty string/[] when absent to keep types stable
+      question: out.question ?? "",
+      nudges: out.nudges ?? [],
+    };
+
+    const nextReflections = [...reflections.filter((r) => r.entryId !== entryId), reflection];
+    setReflections(nextReflections);
+    saveReflections(nextReflections);
+    setSelectedEntryId(entryId);
+  }
+
+  async function onSaveOnly() {
     setReflectError(null);
+    if (!hasDraft) return;
+
+    if (!editingEntryId) {
+      saveNewEntry();
+      return;
+    }
+    updateExistingEntry(editingEntryId);
+  }
+
+  async function onSaveAndReflect() {
+    setReflectError(null);
+    if (!hasDraft) return;
+
     setReflecting(true);
-
     try {
-      // Reflect on selected entry, else most recent, else current draft text
-      const entry =
-        (selectedEntryId ? entries.find((e) => e.id === selectedEntryId) : null) ?? entries[0];
+      let entry: JournalEntry | null = null;
 
-      const sourceText = entry?.text ?? text.trim();
-      if (!sourceText) {
-        setReflecting(false);
-        return;
-      }
+      if (!editingEntryId) entry = saveNewEntry();
+      else entry = updateExistingEntry(editingEntryId);
 
-      const out = privacyMode
-        ? generateLocalReflection(sourceText, memory)
-        : await generateEnhancedReflection(sourceText, memory);
+      if (!entry) return;
 
-      const reflection: Reflection = {
-        entryId: entry?.id ?? "draft",
-        createdAt: new Date().toISOString(),
-        mirror: out.mirror,
-        question: out.question,
-        nudges: out.nudges,
-      };
-
-      if (entry?.id) {
-        const next = [
-          ...reflections.filter((r) => r.entryId !== entry.id),
-          reflection,
-        ];
-        setReflections(next);
-        saveReflections(next);
-        setSelectedEntryId(entry.id);
-      } else {
-        setSelectedEntryId("draft");
-        setReflections((prev) => [...prev.filter((r) => r.entryId !== "draft"), reflection]);
-      }
-    } catch (e: any) {
-      setReflectError(
-        "Enhanced reflection couldn’t load right now. Try again, or switch back to Privacy Mode."
-      );
+      await reflectOnText(entry.id, entry.text);
+    } catch {
+      setReflectError("Enhanced reflection couldn’t load. Try again or switch Privacy Mode back on.");
     } finally {
       setReflecting(false);
     }
   }
 
+  async function onReflectDraftOnly() {
+    setReflectError(null);
+    if (!hasDraft) return;
+
+    setReflecting(true);
+    try {
+      const draftId = "draft";
+      const out = privacyMode
+        ? generateLocalReflection(text.trim(), memory)
+        : await generateEnhancedReflection(text.trim(), memory);
+
+      const reflection: Reflection = {
+        entryId: draftId,
+        createdAt: new Date().toISOString(),
+        mirror: out.mirror,
+        question: out.question ?? "",
+        nudges: out.nudges ?? [],
+      };
+
+      setReflections((prev) => [...prev.filter((r) => r.entryId !== draftId), reflection]);
+      setSelectedEntryId(draftId);
+    } catch {
+      setReflectError("Enhanced reflection couldn’t load. Try again or switch Privacy Mode back on.");
+    } finally {
+      setReflecting(false);
+    }
+  }
+
+  function onRequestDelete(entryId: string) {
+    setDeleteTargetId(entryId);
+  }
+
+  function onConfirmDelete() {
+    if (!deleteTargetId) return;
+
+    const nextEntries = entries.filter((e) => e.id !== deleteTargetId);
+    const nextReflections = reflections.filter(
+      (r) => r.entryId !== deleteTargetId && r.entryId !== "draft"
+    );
+
+    persistAll(nextEntries, nextReflections);
+
+    if (selectedEntryId === deleteTargetId) setSelectedEntryId(null);
+    if (editingEntryId === deleteTargetId) startNewEntry();
+
+    setDeleteTargetId(null);
+  }
+
   const modeLabel = privacyMode ? "Private (local)" : "Enhanced (LLM)";
-  const modeHint = privacyMode
-    ? "No network calls. Runs entirely in your browser."
-    : "Uses an API key. In production, this should run through a server.";
+
+  const headerLine = "A gentle place to think out loud.";
+  const subLine = "Start messy — I’ll help you untangle it.";
+
+  const editorModeLabel = editingEntryId ? "Editing entry" : "New entry";
+  const reflectHint = editingEntryId
+    ? "Update & Reflect will refresh the reflection for this day."
+    : "Save & Reflect creates an entry and generates a reflection.";
 
   return (
     <div className="space-y-5">
+      <ConfirmDialog
+        open={!!deleteTargetId}
+        title="Delete this entry?"
+        description="This will permanently remove the entry and its reflection from this device."
+        confirmText="Delete"
+        cancelText="Cancel"
+        tone="danger"
+        onCancel={() => setDeleteTargetId(null)}
+        onConfirm={onConfirmDelete}
+      />
+
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Journal</h1>
-        <p className="text-slate-600">
-          {todayLabel} · Write messy. Start anywhere. I’ll listen.
-        </p>
+        <p className="text-slate-600">{todayLabel} · {headerLine}</p>
+        <p className="text-xs text-slate-500 mt-1">{subLine}</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -146,17 +274,33 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
         <Card className="p-4">
           <div className="text-xs font-semibold text-slate-500">Reflection mode</div>
           <div className="mt-1 text-sm font-semibold text-slate-900">{modeLabel}</div>
-          <div className="mt-1 text-xs text-slate-600">{modeHint}</div>
-          {!privacyMode && !import.meta.env.VITE_OPENAI_API_KEY && (
-            <div className="mt-2 text-xs text-rose-700">
-              Missing <span className="font-mono">VITE_OPENAI_API_KEY</span> — enhanced mode will fall back to local.
-            </div>
-          )}
+          <div className="mt-1 text-xs text-slate-600">
+            {privacyMode
+              ? "Runs locally in your browser. No network calls."
+              : "Uses an external LLM to generate reflections (prototype)."}
+          </div>
         </Card>
       </div>
 
       <Card className="p-4">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">{editorModeLabel}</div>
+            <div className="text-xs text-slate-600">{reflectHint}</div>
+          </div>
+
+          <button
+            type="button"
+            onClick={startNewEntry}
+            className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 inline-flex items-center gap-2"
+            title="Start a new entry"
+          >
+            <Plus size={16} />
+            New
+          </button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
           {STARTER_CHIPS.map((c) => (
             <button
               key={c}
@@ -184,33 +328,42 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
           <div className="mt-3 flex flex-wrap gap-2 items-center">
             <button
               type="button"
-              onClick={onSave}
+              onClick={onSaveAndReflect}
               className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-95"
+              disabled={!hasDraft || reflecting}
             >
-              Save
+              {reflecting ? "Working…" : editingEntryId ? "Update & Reflect" : "Save & Reflect"}
             </button>
 
             <button
               type="button"
-              onClick={onReflect}
-              disabled={reflecting}
+              onClick={onSaveOnly}
+              className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              disabled={!hasDraft || reflecting}
+            >
+              {editingEntryId ? "Update" : "Save"}
+            </button>
+
+            <button
+              type="button"
+              onClick={onReflectDraftOnly}
               className={cn(
                 "rounded-2xl border border-slate-200 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50",
                 reflecting && "opacity-60 cursor-not-allowed"
               )}
+              disabled={!hasDraft || reflecting}
+              title="Reflect without saving"
             >
-              {reflecting ? "Reflecting…" : "Reflect"}
+              {reflecting ? "Reflecting…" : "Reflect draft"}
             </button>
 
             <span className="ml-auto text-xs text-slate-500">
-              Tip: save first if you want reflections tied to an entry.
+              Reflect draft doesn’t save anything.
             </span>
           </div>
 
           {reflectError && (
-            <div className="mt-3 text-sm text-rose-700">
-              {reflectError}
-            </div>
+            <div className="mt-3 text-sm text-rose-700">{reflectError}</div>
           )}
         </div>
       </Card>
@@ -218,7 +371,9 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
       {selectedReflection && (
         <Card className="p-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold text-slate-900">Listener reflection</div>
+            <div className="text-sm font-semibold text-slate-900">
+              Reflection {selectedEntryId === "draft" ? "(draft)" : ""}
+            </div>
             <div className="text-xs text-slate-500">{modeLabel}</div>
           </div>
 
@@ -226,17 +381,25 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
             {selectedReflection.mirror}
           </p>
 
-          <div className="mt-4 text-sm font-semibold text-slate-900">A gentle question</div>
-          <p className="mt-1 text-sm text-slate-700 leading-relaxed">
-            {selectedReflection.question}
-          </p>
+          {selectedReflection.question?.trim() ? (
+            <>
+              <div className="mt-4 text-sm font-semibold text-slate-900">If you want to keep going</div>
+              <p className="mt-1 text-sm text-slate-700 leading-relaxed">
+                {selectedReflection.question}
+              </p>
+            </>
+          ) : null}
 
-          <div className="mt-4 text-sm font-semibold text-slate-900">If it helps…</div>
-          <ul className="mt-2 list-disc pl-5 text-sm text-slate-700 space-y-1">
-            {selectedReflection.nudges.map((n, i) => (
-              <li key={i}>{n}</li>
-            ))}
-          </ul>
+          {selectedReflection.nudges?.length ? (
+            <>
+              <div className="mt-4 text-sm font-semibold text-slate-900">You could also…</div>
+              <ul className="mt-2 list-disc pl-5 text-sm text-slate-700 space-y-1">
+                {selectedReflection.nudges.map((n, i) => (
+                  <li key={i}>{n}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </Card>
       )}
 
@@ -244,36 +407,60 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-slate-900">Recent entries</div>
-            <div className="text-xs text-slate-600">Click one to view its reflection.</div>
+            <div className="text-xs text-slate-600">
+              Edit anytime. Update & Reflect refreshes the reflection.
+            </div>
           </div>
           <div className="text-xs text-slate-500">{entries.length} saved</div>
         </div>
 
         <div className="mt-3 space-y-2">
           {entries.length === 0 ? (
-            <div className="text-sm text-slate-600">
-              No entries yet. Try a starter prompt above.
-            </div>
+            <div className="text-sm text-slate-600">No entries yet.</div>
           ) : (
-            entries.slice(0, 6).map((e) => (
-              <button
+            entries.slice(0, 8).map((e) => (
+              <div
                 key={e.id}
-                type="button"
-                onClick={() => setSelectedEntryId(e.id)}
                 className={cn(
-                  "w-full text-left rounded-2xl border px-3 py-3 transition",
+                  "w-full rounded-2xl border px-3 py-3 transition flex items-start justify-between gap-3",
                   selectedEntryId === e.id
                     ? "border-slate-900 bg-white"
                     : "border-slate-200 bg-white/70 hover:bg-white"
                 )}
               >
-                <div className="text-xs text-slate-500">
-                  {new Date(e.createdAt).toLocaleString()}
+                <button
+                  type="button"
+                  onClick={() => setSelectedEntryId(e.id)}
+                  className="flex-1 text-left"
+                >
+                  <div className="text-xs text-slate-500">
+                    {new Date(e.createdAt).toLocaleString()}
+                  </div>
+                  <div className="mt-1 text-sm text-slate-800 line-clamp-2">
+                    {e.text}
+                  </div>
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => beginEdit(e.id)}
+                    className="rounded-xl border border-slate-200 bg-white/80 p-2 text-slate-700 hover:bg-slate-50"
+                    title="Edit entry"
+                  >
+                    <PencilLine size={16} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onRequestDelete(e.id)}
+                    className="rounded-xl border border-slate-200 bg-white/80 p-2 text-slate-700 hover:bg-slate-50"
+                    title="Delete entry"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
-                <div className="mt-1 text-sm text-slate-800 line-clamp-2">
-                  {e.text}
-                </div>
-              </button>
+              </div>
             ))
           )}
         </div>
