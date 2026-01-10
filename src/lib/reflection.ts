@@ -70,17 +70,18 @@ function detectTone(text: string): Tone {
 function detectTopic(text: string): Topic {
   const t = text.toLowerCase();
 
-  // New to journaling
-  if (
-    /\b(where do i start|how do i start|dont know where to start|i don'?t know where to start|where should i even start|where should i start)\b/.test(
-      t
-    ) ||
-    /\b(want(ing)? to document my thoughts)\b/.test(t) ||
-    /\b(just want a place to start)\b/.test(t
-    )
-  ) {
-    return "new_to_journaling";
-  }
+    // New to journaling / onboarding (catch very short asks too)
+    if (
+      /\b(where do i start|how do i start|dont know where to start|i don'?t know where to start|where should i even start|where should i start)\b/i.test(
+        t
+      ) ||
+      /\b(start journaling|journal(ing)?|document(ing)? my thoughts)\b/i.test(t) ||
+      // ultra-short advice asks
+      (/\bstart\b/i.test(t) && /\bwhere\b/i.test(t) && t.length <= 40)
+    ) {
+      return "new_to_journaling";
+    }
+  
 
   // Mental wellness / patterns
   if (
@@ -429,7 +430,10 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
   };
 }
 
-export async function generateEnhancedReflection(entryText: string, mem?: UserMemory): Promise<ReflectionOutput> {
+export async function generateEnhancedReflection(
+  entryText: string,
+  mem?: UserMemory
+): Promise<ReflectionOutput> {
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY as string | undefined;
   const cleaned = normalize(entryText);
 
@@ -449,12 +453,21 @@ export async function generateEnhancedReflection(entryText: string, mem?: UserMe
     : { coping: [], likes: [], stressors: [], wins: [] };
 
   const answeredHint = extractAnsweredDrainingPart(cleaned)
-    ? "The entry includes a direct answer to a previous question (e.g., “the most draining part is…”). Acknowledge it and move forward—do not re-ask."
+    ? "The entry includes a direct answer to a previous question (e.g., “the most draining part is…”). Acknowledge it and build forward—do not re-ask."
     : "No explicit answered-question patterns detected.";
 
   const safetyHint = looksLikeSelfHarm(cleaned)
     ? "If the entry implies self-harm or suicide intent, include a short supportive note and encourage reaching local crisis resources; in the U.S. mention 988. Do not be alarmist."
     : "Avoid medical claims. Don’t diagnose.";
+
+  // Topic forcing: prevents generic responses when user is clearly asking for journaling help.
+  const topicDirectives = `
+Topic handling requirements:
+- If detectedTopic is "new_to_journaling": you MUST give actionable getting-started guidance (2–4 short lines) and include 1 gentle question. Do NOT reply with generic encouragement like “not every entry has to be deep.” The user is explicitly asking for help starting.
+- If detectedTopic is "work": validate + name the likely stressor (schedule/pressure/time not feeling yours) and ask 1 next-step question that fits the entry.
+- If detectedTopic is "wins_gratitude": it’s OK to be short, and it’s OK to have no question.
+- If detectedTopic is "general" and tone is neutral: keep it light, but still respond to what they actually said (no template filler).
+`.trim();
 
   const prompt = `
 You are a journaling companion that feels HUMAN and conversational — like a thoughtful friend who listens well.
@@ -462,12 +475,15 @@ The user wants something they could use long-term, not a template.
 
 Critical rules:
 - DO NOT invent details, phrases, or vibes the user didn’t say.
-- Do NOT paraphrase the whole entry or say “You wrote:”.
+- Do NOT quote the user or say “You wrote:”.
 - Avoid therapy clichés unless truly appropriate.
-- It’s OK to respond in only 2–3 sentences.
+- Mirror should be 2–6 sentences. (Short is okay if it fits.)
 - Question and nudges are optional and can be null.
-- If the user already answers a question inside the entry, acknowledge it and build on it (don’t ignore it).
-- If using memory, do it naturally and not every time.
+- If the user is asking a direct question (e.g., “where do I start?”), you must answer it directly.
+- If the entry already answers a prior question inside it, acknowledge that and move forward (don’t ignore it).
+- Use memory subtly and not every time.
+
+${topicDirectives}
 
 Extra hint: ${answeredHint}
 ${safetyHint}
@@ -480,7 +496,7 @@ Context:
 User entry:
 ${cleaned}
 
-Return ONLY JSON:
+Return ONLY JSON (no markdown, no commentary):
 {
   "mirror": string,
   "question": string | null,
@@ -488,52 +504,81 @@ Return ONLY JSON:
 }
 `.trim();
 
-  const res = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      input: prompt,
-      max_output_tokens: 650,
-      text: { format: { type: "json_object" } },
-    }),
-  });
+  // Optional: abort/timeout so a hung request doesn’t stall UI
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
 
-  if (!res.ok) return generateLocalReflection(cleaned, mem);
-
-  const data: any = await res.json();
-
-  const chunks: string[] = [];
-  const output = Array.isArray(data.output) ? data.output : [];
-  for (const item of output) {
-    const content = Array.isArray(item?.content) ? item.content : [];
-    for (const c of content) {
-      if (typeof c?.text === "string") chunks.push(c.text);
-    }
-  }
-  const textOut = chunks.join("\n").trim();
-  if (!textOut) return generateLocalReflection(cleaned, mem);
-
-  let parsed: any;
   try {
-    parsed = JSON.parse(textOut);
+    const res = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: "gpt-4o",
+        input: prompt,
+        max_output_tokens: 650,
+        text: { format: { type: "json_object" } },
+      }),
+    });
+
+    if (!res.ok) return generateLocalReflection(cleaned, mem);
+
+    const data: any = await res.json();
+
+    // Most reliable: output_text if present
+    const candidate =
+      (typeof data.output_text === "string" && data.output_text.trim()) ||
+      "";
+
+    let textOut = candidate;
+
+    // Fallback: traverse output blocks if output_text missing
+    if (!textOut) {
+      const chunks: string[] = [];
+      const output = Array.isArray(data.output) ? data.output : [];
+      for (const item of output) {
+        const content = Array.isArray(item?.content) ? item.content : [];
+        for (const c of content) {
+          // Responses API often uses { type: "output_text", text: "..." }
+          if (typeof c?.text === "string") chunks.push(c.text);
+        }
+      }
+      textOut = chunks.join("\n").trim();
+    }
+
+    if (!textOut) return generateLocalReflection(cleaned, mem);
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(textOut);
+    } catch {
+      return generateLocalReflection(cleaned, mem);
+    }
+
+    const mirror = typeof parsed.mirror === "string" ? parsed.mirror.trim() : "";
+    const question =
+      parsed.question === null
+        ? undefined
+        : typeof parsed.question === "string"
+        ? parsed.question.trim()
+        : undefined;
+
+    const nudges =
+      parsed.nudges === null
+        ? undefined
+        : Array.isArray(parsed.nudges)
+        ? parsed.nudges.filter((x: any) => typeof x === "string").slice(0, 3)
+        : undefined;
+
+    if (!mirror) return generateLocalReflection(cleaned, mem);
+
+    return { mode: "enhanced", mirror, question, nudges };
   } catch {
     return generateLocalReflection(cleaned, mem);
+  } finally {
+    window.clearTimeout(timeout);
   }
-
-  const mirror = typeof parsed.mirror === "string" ? parsed.mirror : null;
-  const question = parsed.question === null ? undefined : typeof parsed.question === "string" ? parsed.question : undefined;
-  const nudges =
-    parsed.nudges === null
-      ? undefined
-      : Array.isArray(parsed.nudges)
-      ? parsed.nudges.filter((x: any) => typeof x === "string").slice(0, 3)
-      : undefined;
-
-  if (!mirror) return generateLocalReflection(cleaned, mem);
-
-  return { mode: "enhanced", mirror, question, nudges };
 }
