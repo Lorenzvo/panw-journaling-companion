@@ -1,35 +1,27 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useMemo, useState } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { AppShell } from "./components/AppShell";
+import { JournalPage } from "./pages/JournalPage";
+import { InsightsPage } from "./pages/InsightsPage";
+import { ReflectionPage } from "./pages/ReflectionPage";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [privacyMode, setPrivacyMode] = useState(true);
+
+  // (Later) privacyMode will control whether we call any external AI API.
+  const shellProps = useMemo(
+    () => ({ privacyMode, setPrivacyMode }),
+    [privacyMode]
+  );
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <AppShell {...shellProps}>
+      <Routes>
+        <Route path="/" element={<Navigate to="/journal" replace />} />
+        <Route path="/journal" element={<JournalPage />} />
+        <Route path="/insights" element={<InsightsPage />} />
+        <Route path="/reflection" element={<ReflectionPage />} />
+      </Routes>
+    </AppShell>
+  );
 }
-
-export default App
