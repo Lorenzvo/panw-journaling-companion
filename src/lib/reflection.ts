@@ -1,3 +1,5 @@
+import type { UserMemory } from "../types/memory";
+
 function pick<T>(arr: T[]): T {
     return arr[Math.floor(Math.random() * arr.length)];
   }
@@ -21,7 +23,7 @@ function pick<T>(arr: T[]): T {
     };
   }
   
-  export function generateLocalReflection(entryText: string) {
+  export function generateLocalReflection(entryText: string, mem?: UserMemory) {
     const snippet = cleanSnippet(entryText);
     const s = detectSignals(entryText);
   
@@ -61,7 +63,6 @@ function pick<T>(arr: T[]): T {
           "Thanks for putting this into words—there’s something real here.",
         ]);
   
-    const mirror = `${mirrorBase} You wrote: “${snippet}”`;
   
     // Question: listener-first, not advice
     const question = s.overwhelmed
@@ -78,6 +79,17 @@ function pick<T>(arr: T[]): T {
       ? "Whose voice does that self-criticism sound like—and what would you say to a friend in the same spot?"
       : "What part of this feels most important to say out loud, even if it’s messy?";
   
+    const callback =
+    mem?.coping?.length
+    ? `One thing you’ve said helps before: ${mem.coping[0]}.`
+    : mem?.wins?.length
+    ? `Also—small reminder: you’ve had wins like ${mem.wins[0]}.`
+    : null;
+
+    const mirror = callback
+  ? `${mirrorBase} You wrote: “${snippet}”\n\n${callback}`
+  : `${mirrorBase} You wrote: “${snippet}”`;
+    
     // Nudges: tiny prompts to keep writing
     const nudges = [
       pick([

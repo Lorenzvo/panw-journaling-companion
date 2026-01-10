@@ -4,6 +4,11 @@ import { cn, formatDateLong } from "../lib/utils";
 import { generateLocalReflection } from "../lib/reflection";
 import { loadEntries, loadReflections, saveEntries, saveReflections } from "../lib/storage";
 import type { JournalEntry, Reflection } from "../types/journal";
+import { loadMemory, saveMemory, extractMemoryFromText, buildMemoryFromEntries } from "../lib/memory";
+import type { UserMemory } from "../types/memory";
+import { quoteOfTheDay } from "../lib/quote";
+
+
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -19,6 +24,18 @@ const STARTER_CHIPS = [
 
 export function JournalPage() {
   const [entries, setEntries] = useState<JournalEntry[]>(() => loadEntries());
+
+  const [memory, setMemory] = useState<UserMemory>(() => {
+    const m = loadMemory();
+    // If memory is empty but entries exist, bootstrap once:
+    if (!m.coping.length && !m.likes.length && !m.stressors.length && !m.wins.length && entries.length) {
+      const built = buildMemoryFromEntries(entries);
+      saveMemory(built);
+      return built;
+    }
+    return m;
+  });
+  
   const [reflections, setReflections] = useState<Reflection[]>(() => loadReflections());
 
   const [text, setText] = useState("");
@@ -36,7 +53,9 @@ export function JournalPage() {
 
   function onSave() {
     const trimmed = text.trim();
+    
     if (!trimmed) return;
+
 
     const entry: JournalEntry = {
       id: uid(),
@@ -47,6 +66,10 @@ export function JournalPage() {
     const next = [entry, ...entries];
     setEntries(next);
     saveEntries(next);
+
+    const nextMem = extractMemoryFromText(trimmed, memory);
+    setMemory(nextMem);
+    saveMemory(nextMem);
 
     setSelectedEntryId(entry.id);
     setText("");
@@ -61,7 +84,7 @@ export function JournalPage() {
     const sourceText = entry?.text ?? text.trim();
     if (!sourceText) return;
 
-    const { mirror, question, nudges } = generateLocalReflection(sourceText);
+    const { mirror, question, nudges } = generateLocalReflection(sourceText, memory);
 
     const reflection: Reflection = {
       entryId: entry?.id ?? "draft",
@@ -96,6 +119,12 @@ export function JournalPage() {
           {todayLabel} · Write messy. Start anywhere. I’ll listen.
         </p>
       </div>
+
+      <Card className="p-4">
+        <div className="text-xs font-semibold text-slate-500">Today’s line</div>
+        <div className="mt-1 text-sm text-slate-800">{quoteOfTheDay()}</div>
+      </Card>
+
 
       <Card className="p-4">
         <div className="flex flex-wrap gap-2">
