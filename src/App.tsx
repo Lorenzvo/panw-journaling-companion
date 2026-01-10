@@ -8,7 +8,6 @@ import { ReflectionPage } from "./pages/ReflectionPage";
 export default function App() {
   const [privacyMode, setPrivacyMode] = useState(true);
 
-  // (Later) privacyMode will control whether we call any external AI API.
   const shellProps = useMemo(
     () => ({ privacyMode, setPrivacyMode }),
     [privacyMode]
@@ -18,7 +17,7 @@ export default function App() {
     <AppShell {...shellProps}>
       <Routes>
         <Route path="/" element={<Navigate to="/journal" replace />} />
-        <Route path="/journal" element={<JournalPage />} />
+        <Route path="/journal" element={<JournalPage privacyMode={privacyMode} />} />
         <Route path="/insights" element={<InsightsPage />} />
         <Route path="/reflection" element={<ReflectionPage />} />
       </Routes>
