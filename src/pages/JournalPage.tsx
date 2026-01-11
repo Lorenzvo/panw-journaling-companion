@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card } from "../components/Card";
-import { cn, formatDateLong } from "../lib/utils";
+import { cn, formatDateLong, localDateKeyFromISOString, randomId } from "../lib/utils";
 import { loadEntries, loadReflections, saveEntries, saveReflections } from "../lib/storage";
 import type { JournalEntry, Reflection } from "../types/journal";
 import { loadMemory, saveMemory, buildMemoryFromEntries } from "../lib/memory";
@@ -15,20 +15,6 @@ import { topBucketsForText } from "../lib/insights/themes";
 import { ThemeChips } from "../components/ThemeChips";
 import { ThemeOrbit } from "../components/ThemeOrbit";
 
-
-function uid() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-function dayKeyFromCreatedAt(createdAt: string) {
-  const d = new Date(createdAt);
-  if (Number.isNaN(d.getTime())) return createdAt.slice(0, 10);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 const STARTER_CHIPS = [
   "Quick recap: today I…",
   "One thing that went well was…",
@@ -38,34 +24,33 @@ const STARTER_CHIPS = [
   "Right now I feel…",
 ];
 
+const TUTORIAL_STEPS = [
+  {
+    title: "A gentle place to think out loud",
+    body: "This is journaling without pressure.\nWrite messy. Typos are fine. One sentence counts.",
+  },
+  {
+    title: "Save vs Reflect (what’s the difference?)",
+    body:
+      "• Save / Update stores your entry.\n• Reflect draft gives instant feedback without saving.\n• Save & Reflect (or Update & Reflect) saves and generates a reflection.",
+  },
+  {
+    title: "Privacy Mode",
+    body:
+      "Privacy Mode ON = local reflection in your browser.\nPrivacy Mode OFF = enhanced reflection using an LLM.\n(You’ll always get a reflection — it’ll just change how it’s generated.)",
+  },
+  {
+    title: "Make it yours over time",
+    body:
+      "Solace remembers gentle preferences (like coping tools that help you).\nIt should feel subtle — not intrusive.",
+  },
+] as const;
+
 export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
   const enhancedAvailable = Boolean(import.meta.env.VITE_OPENAI_API_KEY);
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
-
-  const tutorial = [
-    {
-      title: "A gentle place to think out loud",
-      body:
-        "This is journaling without pressure.\nWrite messy. Typos are fine. One sentence counts.",
-    },
-    {
-      title: "Save vs Reflect (what’s the difference?)",
-      body:
-        "• Save / Update stores your entry.\n• Reflect draft gives instant feedback without saving.\n• Save & Reflect (or Update & Reflect) saves and generates a reflection.",
-    },
-    {
-      title: "Privacy Mode",
-      body:
-        "Privacy Mode ON = local reflection in your browser.\nPrivacy Mode OFF = enhanced reflection using an LLM.\n(You’ll always get a reflection — it’ll just change how it’s generated.)",
-    },
-    {
-      title: "Make it yours over time",
-      body:
-        "Solace remembers gentle preferences (like coping tools that help you).\nIt should feel subtle — not intrusive.",
-    },
-  ];
 
   const [entries, setEntries] = useState<JournalEntry[]>(() => loadEntries());
   const [reflections, setReflections] = useState<Reflection[]>(() => loadReflections());
@@ -109,7 +94,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     setSelectedEntryId(entryParam);
     setExpandedDays((prev) => {
       const next = new Set(prev);
-      next.add(dayKeyFromCreatedAt(entry.createdAt));
+      next.add(localDateKeyFromISOString(entry.createdAt));
       return next;
     });
 
@@ -124,7 +109,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
   const dayGroups = useMemo(() => {
     const groups = new Map<string, JournalEntry[]>();
     for (const e of entries) {
-      const k = dayKeyFromCreatedAt(e.createdAt); // local YYYY-MM-DD
+      const k = localDateKeyFromISOString(e.createdAt); // local YYYY-MM-DD
       const cur = groups.get(k);
       if (cur) cur.push(e);
       else groups.set(k, [e]);
@@ -137,16 +122,16 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     }));
   }, [entries]);
 
-  const selectedReflection = useMemo(() => {
-    if (!selectedEntryId) return null;
-    return reflections.find((r) => r.entryId === selectedEntryId) ?? null;
-  }, [reflections, selectedEntryId]);
-
   const reflectionByEntryId = useMemo(() => {
     const m = new Map<string, Reflection>();
     for (const r of reflections) m.set(r.entryId, r);
     return m;
   }, [reflections]);
+
+  const selectedReflection = useMemo(() => {
+    if (!selectedEntryId) return null;
+    return reflectionByEntryId.get(selectedEntryId) ?? null;
+  }, [reflectionByEntryId, selectedEntryId]);
 
   const selectedThemes = useMemo(() => {
     if (!selectedEntryId) return [];
@@ -183,7 +168,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     setSelectedEntryId(entry.id);
     setText(entry.text);
     setReflectError(null);
-    const dayKey = dayKeyFromCreatedAt(entry.createdAt);
+    const dayKey = localDateKeyFromISOString(entry.createdAt);
     setExpandedDays((prev) => {
       const next = new Set(prev);
       next.add(dayKey);
@@ -196,7 +181,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     if (!trimmed) return null;
 
     const entry: JournalEntry = {
-      id: uid(),
+      id: randomId(),
       createdAt: new Date().toISOString(),
       text: trimmed,
     };
@@ -208,7 +193,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     setSelectedEntryId(entry.id);
     setEditingEntryId(entry.id);
     setText(trimmed); // keep it in editor so they can keep editing if they want
-    const dayKey = dayKeyFromCreatedAt(entry.createdAt);
+    const dayKey = localDateKeyFromISOString(entry.createdAt);
     setExpandedDays((prev) => {
       const next = new Set(prev);
       next.add(dayKey);
@@ -241,7 +226,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     setEditingEntryId(entryId);
     setExpandedDays((prev) => {
       const next = new Set(prev);
-      next.add(dayKeyFromCreatedAt(updated.createdAt));
+      next.add(localDateKeyFromISOString(updated.createdAt));
       return next;
     });
     return updated;
@@ -271,7 +256,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     setSelectedEntryId(entryId);
   }
 
-  async function onSaveOnly() {
+  function onSaveOnly() {
     setReflectError(null);
     if (!hasDraft) return;
 
@@ -405,35 +390,37 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
         onConfirm={onConfirmDelete}
       />
 
-    <TutorialModal
-      open={showTutorial}
-      step={tutorialStep}
-      total={tutorial.length}
-      title={tutorial[tutorialStep].title}
-      body={tutorial[tutorialStep].body}
-      onPrev={() => setTutorialStep((s) => Math.max(0, s - 1))}
-      onNext={() => {
-        if (tutorialStep === tutorial.length - 1) setShowTutorial(false);
-        else setTutorialStep((s) => Math.min(tutorial.length - 1, s + 1));
-      }}
-      onClose={() => setShowTutorial(false)}
-    />
+      <TutorialModal
+        open={showTutorial}
+        step={tutorialStep}
+        total={TUTORIAL_STEPS.length}
+        title={TUTORIAL_STEPS[tutorialStep].title}
+        body={TUTORIAL_STEPS[tutorialStep].body}
+        onPrev={() => setTutorialStep((s) => Math.max(0, s - 1))}
+        onNext={() => {
+          if (tutorialStep === TUTORIAL_STEPS.length - 1) setShowTutorial(false);
+          else setTutorialStep((s) => Math.min(TUTORIAL_STEPS.length - 1, s + 1));
+        }}
+        onClose={() => setShowTutorial(false)}
+      />
 
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Journal</h1>
+          <p className="text-slate-600">{todayLabel} · Start messy. I’ll help you untangle it.</p>
+        </div>
 
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Journal</h1>
-        <p className="text-slate-600">{todayLabel} · Start messy. I’ll help you untangle it.</p>
+        <button
+          type="button"
+          onClick={() => {
+            setTutorialStep(0);
+            setShowTutorial(true);
+          }}
+          className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+        >
+          Tutorial
+        </button>
       </div>
-
-      <button
-        type="button"
-        onClick={() => { setTutorialStep(0); setShowTutorial(true); }}
-        className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-      >
-        Tutorial
-      </button>
-    </div>
 
 
       <div className="grid gap-3 sm:grid-cols-2">

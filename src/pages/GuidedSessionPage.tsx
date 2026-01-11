@@ -1,17 +1,13 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
-import { cn, formatDateLong } from "../lib/utils";
+import { cn, formatDateLong, randomId } from "../lib/utils";
 import { SESSION_MODES, type SessionMode, type SessionModeId } from "../lib/guidedSessionPrompts";
 import { loadEntries, loadReflections, saveEntries, saveReflections } from "../lib/storage";
 import type { JournalEntry, Reflection } from "../types/journal";
 import { buildMemoryFromEntries, saveMemory } from "../lib/memory";
 import { generateEnhancedReflection, generateLocalReflection } from "../lib/reflection";
 import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, Sparkles } from "lucide-react";
-
-function uid() {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 function buildSessionEntry(mode: SessionMode, answers: string[]) {
   const lines: string[] = [];
@@ -58,8 +54,7 @@ export function GuidedSessionPage({ privacyMode }: { privacyMode: boolean }) {
     return "answer";
   }, [mode, promptIndex, resultEntryId]);
 
-  const apiKey = (import.meta as any).env?.VITE_OPENAI_API_KEY as string | undefined;
-  const enhancedAvailable = !!apiKey;
+  const enhancedAvailable = Boolean(import.meta.env.VITE_OPENAI_API_KEY);
 
   function reset() {
     setModeId(null);
@@ -123,7 +118,7 @@ export function GuidedSessionPage({ privacyMode }: { privacyMode: boolean }) {
       const entryText = buildSessionEntry(mode, answers);
 
       const entry: JournalEntry = {
-        id: uid(),
+        id: randomId(),
         createdAt: new Date().toISOString(),
         text: entryText,
       };

@@ -1,9 +1,8 @@
-// src/pages/InsightsPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "../components/Card";
 import { loadEntries } from "../lib/storage";
 import { buildMemoryFromEntries, loadMemory, saveMemory } from "../lib/memory";
-import { cn, formatDateLong } from "../lib/utils";
+import { cn, formatDateLong, localDateKeyFromISOString } from "../lib/utils";
 import { installInsightsNetworkGuard } from "../lib/insights/onDeviceGuard";
 import type { JournalEntry } from "../types/journal";
 import {
@@ -197,17 +196,6 @@ function ThemeCard({
   );
 }
 
-function entriesForDay(entries: JournalEntry[], dateKey: string) {
-  return entries.filter((e) => {
-    const d = new Date(e.createdAt);
-    if (Number.isNaN(d.getTime())) return e.createdAt.slice(0, 10) === dateKey;
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}` === dateKey;
-  });
-}
-
 export function InsightsPage() {
   useEffect(() => {
     const uninstall = installInsightsNetworkGuard();
@@ -231,16 +219,19 @@ export function InsightsPage() {
   const [expandedThemeId, setExpandedThemeId] = useState<string | null>(null);
   const [activeDay, setActiveDay] = useState<MoodPoint | null>(null);
 
-  const activeDayEntriesCount = useMemo(() => {
-    if (!activeDay) return 0;
-    return entriesForDay(entries, activeDay.dateKey).length;
+  const activeDayEntries = useMemo(() => {
+    if (!activeDay) return [];
+    return entries.filter((e) => localDateKeyFromISOString(e.createdAt) === activeDay.dateKey);
   }, [activeDay, entries]);
+
+  const activeDayEntriesCount = useMemo(() => {
+    return activeDayEntries.length;
+  }, [activeDayEntries]);
 
   const activeDayWhy = useMemo(() => {
     if (!activeDay) return null;
-    const dayEntries = entriesForDay(entries, activeDay.dateKey);
-    return explainDayMood(dayEntries, activeDay);
-  }, [activeDay, entries]);
+    return explainDayMood(activeDayEntries, activeDay);
+  }, [activeDay, activeDayEntries]);
 
   return (
     <div className="space-y-5">

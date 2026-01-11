@@ -22,7 +22,11 @@ export function Modal({ open, onClose, children, className, labelledBy, describe
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
     >
-      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={onClose} />
+      <div
+        data-testid="modal-backdrop"
+        className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm"
+        onClick={onClose}
+      />
       <div className={cn("relative w-[92vw]", className)}>{children}</div>
     </div>
   );
