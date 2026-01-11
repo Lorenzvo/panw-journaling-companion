@@ -1,6 +1,20 @@
 # Solace — Privacy-first journaling companion (prototype)
  
  Solace is a lightweight journaling app designed to help users build a daily writing habit and gently surface patterns over time.
+
+## Demo
+
+**Product Walkthrough**  
+https://loom.com/share/180bcac6f19c47c39b13963c562143fe
+
+---
+
+## Design Documentation
+
+**Design Documentation (PDF)**  
+See `Solace Journal - Design Documentation.pdf` in the root of this repository for a detailed overview
+
+---
  
  ## Problem
  People want to journal consistently, but friction ("I don’t know what to write"), low energy, and fear of being judged can make the habit hard to sustain.
@@ -41,5 +55,3 @@
   npm test
   npm run lint
   npm run build
-  ```
-      },
