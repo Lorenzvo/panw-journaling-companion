@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import { Container } from "./Container";
 import { Toggle } from "./Toggle";
 import { cn } from "../lib/utils";
-import { Sparkles, NotebookPen, BarChart3 } from "lucide-react";
+import { Sparkles, NotebookPen, BarChart3, PencilLine } from "lucide-react";
 import { useState } from "react";
 import { ConfirmDialog } from "./ConfirmDialog";
 
@@ -46,14 +46,14 @@ export function AppShell({
         <Container className="py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
-              <Sparkles size={18} />
+              <PencilLine size={18} />
             </div>
             <div className="leading-tight">
               <div className="text-sm font-semibold text-slate-900">
                 Solace Journal
               </div>
               <div className="text-xs text-slate-600">
-                Start messy. I’ll help you untangle it.
+                A gentle place to think out loud.
               </div>
             </div>
           </div>

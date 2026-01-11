@@ -97,7 +97,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     setSelectedEntryId(entryParam);
     setExpandedDays((prev) => {
       const next = new Set(prev);
-      next.add(entry.createdAt.slice(0, 10));
+      next.add(dayKeyFromCreatedAt(entry.createdAt));
       return next;
     });
 
@@ -375,8 +375,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     <div className="flex items-start justify-between gap-3">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Journal</h1>
-        <p className="text-slate-600">{todayLabel} · A gentle place to think out loud.</p>
-        <p className="text-xs text-slate-500 mt-1">Start messy — I’ll help you untangle it.</p>
+        <p className="text-slate-600">{todayLabel} · Start messy. I’ll help you untangle it.</p>
       </div>
 
       <button
