@@ -4,6 +4,7 @@
 let installed = false;
 
 export function installInsightsNetworkGuard() {
+  if (typeof window === "undefined" || typeof window.fetch !== "function") return () => {};
   if (installed) return () => {};
   installed = true;
 

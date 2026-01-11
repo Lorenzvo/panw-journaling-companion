@@ -1,5 +1,5 @@
 import type { JournalEntry } from "../../types/journal";
-import { LOAD_SIGNALS, dayKey, normalize, unique } from "./shared";
+import { LOAD_SIGNALS, dayKey, humanJoin, normalize, splitSentences, unique } from "./shared";
 import { scoreSentiment, sentimentLabel, type SentimentLabel } from "./sentiment";
 import { signalPhrasesForBucket, topBucketsForText, type Theme } from "./themes";
 import type { DayPoint } from "./types";
@@ -10,35 +10,6 @@ export type WeeklySummary = {
   toneLabel: SentimentLabel;
   bullets: string[];
 };
-
-function humanJoin(items: string[]) {
-  if (items.length === 0) return "";
-  if (items.length === 1) return items[0];
-  if (items.length === 2) return `${items[0]} and ${items[1]}`;
-  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
-}
-
-function sentenceSplit(text: string) {
-  const s = text.trim();
-  if (!s) return [];
-
-  const out: string[] = [];
-  let buf = "";
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    buf += ch;
-    const isEnd = ch === "." || ch === "!" || ch === "?";
-    const next = s[i + 1] ?? "";
-    if (isEnd && (next === " " || next === "\n" || next === "\t" || next === "")) {
-      const trimmed = buf.trim();
-      if (trimmed) out.push(trimmed);
-      buf = "";
-    }
-  }
-  const tail = buf.trim();
-  if (tail) out.push(tail);
-  return out;
-}
 
 function tokenKey(text: string) {
   return normalize(text)
@@ -59,7 +30,7 @@ function jaccard(a: string[], b: string[]) {
 }
 
 function dedupeSentences(text: string) {
-  const sentences = sentenceSplit(text);
+  const sentences = splitSentences(text);
   const kept: string[] = [];
   const keptKeys: string[][] = [];
 

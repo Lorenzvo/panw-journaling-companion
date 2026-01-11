@@ -22,6 +22,8 @@ function canonicalHelp(label: string) {
   if (/(walk|walking|movement|move|exercise|run|gym|workout|stretch)/.test(t)) return "Movement";
   if (/(music|song|playlist|listen|piano|guitar|drums|instrument|sing|singing|kpop)/.test(t)) return "Music";
   if (/(journal|journaling|write|writing|reflect|reflection)/.test(t)) return "Writing it out";
+  if (/(coffee|tea|warm drink)/.test(t)) return "Warm drink";
+  if (/(shower|bath)/.test(t)) return "Rest";
   if (/(sleep|rest|nap|relax|relaxing|do nothing|nothing|chill)/.test(t)) return "Rest";
   if (/(friend|friends|family|hang out|talk|talking|call|text|catch up|see people)/.test(t)) return "Connection";
   if (/(read|reading|book|novel)/.test(t)) return "Reading";

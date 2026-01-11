@@ -87,6 +87,7 @@ export function buildMoodTimeline(entries: JournalEntry[], days = 14): DayPoint[
 
   for (const e of entries) {
     const d = new Date(e.createdAt);
+    if (Number.isNaN(d.getTime())) continue;
     if (d < start) continue;
     const k = dayKey(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0));
     const s = scoreSentiment(e.text);
