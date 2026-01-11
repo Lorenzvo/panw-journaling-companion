@@ -13,11 +13,19 @@ const emptyMemory = (): UserMemory => ({
   updatedAt: new Date().toISOString(),
 });
 
-function uniqPush(arr: string[], item: string, limit = 12) {
+function uniqPush(arr: string[], item: string, limit = 12): string[] {
   const cleaned = item.trim().replace(/\s+/g, " ");
   if (!cleaned) return arr;
   if (arr.some((x) => x.toLowerCase() === cleaned.toLowerCase())) return arr;
   return [cleaned, ...arr].slice(0, limit);
+}
+
+function getStorage(): Storage | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
 }
 
 function canonicalCoping(textLower: string): string[] {
@@ -114,10 +122,9 @@ function extractPeopleMentions(text: string): string[] {
 
 export function extractMemoryFromText(text: string, prev: UserMemory): UserMemory {
   let mem = { ...prev };
-  const raw = text.trim();
+  const raw = (text ?? "").trim();
   if (!raw) return mem;
 
-  // Guided sessions include prompt text; only learn from the user's answers.
   const firstLine = raw.split("\n")[0] ?? "";
   const isGuided = /^Guided Session\s*(?:—|-|:)/i.test(firstLine.trim());
   const t = isGuided
@@ -133,39 +140,31 @@ export function extractMemoryFromText(text: string, prev: UserMemory): UserMemor
 
   const lower = t.toLowerCase();
 
-  // Coping: capture canonical items (so callbacks sound natural)
   for (const c of canonicalCoping(lower)) {
     mem.coping = uniqPush(mem.coping, c);
   }
 
-  // Hobbies (broad + safe)
   for (const h of canonicalHobbies(lower)) {
     mem.hobbies = uniqPush(mem.hobbies, h);
   }
 
-  // People in their life (roles + explicit names)
   for (const p of extractPeopleMentions(t)) {
     mem.people = uniqPush(mem.people, p);
   }
 
-  // Likes
   const likeMatch = t.match(/(?:i enjoy|i like|i love)\s+(.*)/i);
   if (likeMatch?.[1]) mem.likes = uniqPush(mem.likes, likeMatch[1]);
 
-  // Stressors
   const stressMatch =
     t.match(/(?:stressed|worried|anxious)\s+(?:about|because of)\s+(.*)/i) ||
     t.match(/(?:it stresses me out when)\s+(.*)/i);
   if (stressMatch?.[1]) mem.stressors = uniqPush(mem.stressors, stressMatch[1]);
 
-  // Work-style stressors even if they didn't use the word "stressed"
   if (/\b(back[- ]?to[- ]?back|meetings? back to back|no time|time isn'?t mine|time isnt mine|deadline|on-call|overtime)\b/i.test(t)) {
     mem.stressors = uniqPush(mem.stressors, "work pressure / no breathing room");
   }
 
-  // Wins
-  const winMatch =
-    t.match(/(?:proud of|went well|small win|i managed to|i did)\s+(.*)/i);
+  const winMatch = t.match(/(?:proud of|went well|small win|i managed to|i did)\s+(.*)/i);
   if (winMatch?.[1]) mem.wins = uniqPush(mem.wins, winMatch[1]);
 
   mem.updatedAt = new Date().toISOString();
@@ -173,11 +172,12 @@ export function extractMemoryFromText(text: string, prev: UserMemory): UserMemor
 }
 
 export function loadMemory(): UserMemory {
+  const storage = getStorage();
+  if (!storage) return emptyMemory();
   try {
-    const raw = localStorage.getItem(MEMORY_KEY);
+    const raw = storage.getItem(MEMORY_KEY);
     if (!raw) return emptyMemory();
     const parsed = JSON.parse(raw) as Partial<UserMemory>;
-    // Lightweight migration: fill missing fields from older versions.
     return {
       ...emptyMemory(),
       ...parsed,
@@ -194,8 +194,10 @@ export function loadMemory(): UserMemory {
   }
 }
 
-export function saveMemory(mem: UserMemory) {
-  localStorage.setItem(MEMORY_KEY, JSON.stringify(mem));
+export function saveMemory(mem: UserMemory): void {
+  const storage = getStorage();
+  if (!storage) return;
+  storage.setItem(MEMORY_KEY, JSON.stringify(mem));
 }
 
 export function buildMemoryFromEntries(entries: JournalEntry[]): UserMemory {
