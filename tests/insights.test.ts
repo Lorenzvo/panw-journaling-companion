@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import type { JournalEntry } from "../src/types/journal";
+import type { UserMemory } from "../src/types/memory";
+import type { DayPoint } from "../src/lib/insights/types";
+
 import { buildMoodTimeline } from "../src/lib/insights/mood";
 import { scoreSentiment, sentimentLabel } from "../src/lib/insights/sentiment";
 import { extractThemes } from "../src/lib/insights/themes";
 import { whatHelped } from "../src/lib/insights/help";
 
 // Minimal shape for tests; the insights logic only reads these fields.
-function entry(text: string, createdAt: string) {
-  return {
-    id: "test",
-    text,
-    createdAt,
-  } as const;
+function entry(text: string, createdAt: string): JournalEntry {
+  return { id: "test", text, createdAt };
 }
 
 describe("insights/sentiment", () => {
@@ -35,13 +35,7 @@ describe("insights/sentiment", () => {
 
 describe("insights/mood", () => {
   it("ignores entries with invalid dates", () => {
-    const timeline = buildMoodTimeline(
-      [
-        entry("good day", "not-a-date"),
-        entry("bad day", new Date().toISOString()),
-      ] as any,
-      7
-    );
+    const timeline = buildMoodTimeline([entry("good day", "not-a-date"), entry("bad day", new Date().toISOString())], 7);
 
     expect(timeline).toHaveLength(7);
     expect(timeline.every((p) => !p.dateKey.includes("NaN"))).toBe(true);
@@ -51,10 +45,10 @@ describe("insights/mood", () => {
 describe("insights/themes", () => {
   it("extracts a work theme from work-heavy entries", () => {
     const now = new Date();
-    const entries = [
+    const entries: JournalEntry[] = [
       entry("Back to back meetings and a deadline. No time.", now.toISOString()),
       entry("Client pressure is stressing me out.", now.toISOString()),
-    ] as any;
+    ];
 
     const themes = extractThemes(entries, 6);
     expect(themes.some((t) => t.id === "work")).toBe(true);
@@ -63,8 +57,16 @@ describe("insights/themes", () => {
 
 describe("insights/help", () => {
   it("surfaces coffee/tea as a warm-drink stabilizer", () => {
-    const memory = { coping: ["coffee/tea"], hobbies: [], likes: [] } as any;
-    const timeline = [{ dateKey: "2020-01-01", day: "Wed", avg: -2, label: "very_low", count: 1 }] as any;
+    const memory: UserMemory = {
+      coping: ["coffee/tea"],
+      hobbies: [],
+      likes: [],
+      people: [],
+      stressors: [],
+      wins: [],
+      updatedAt: new Date().toISOString(),
+    };
+    const timeline: DayPoint[] = [{ dateKey: "2020-01-01", day: "Wed", avg: -2, label: "very_low", count: 1 }];
     const items = whatHelped(memory, timeline);
     expect(items.some((i) => i.label.toLowerCase().includes("warm drink"))).toBe(true);
   });
