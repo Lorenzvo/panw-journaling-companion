@@ -7,4 +7,3 @@ export type UserMemory = {
   wins: string[];
   updatedAt: string;
 };
-  

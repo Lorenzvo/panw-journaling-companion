@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { JournalPage } from "./pages/JournalPage";
@@ -8,13 +8,8 @@ import { GuidedSessionPage } from "./pages/GuidedSessionPage";
 export default function App() {
   const [privacyMode, setPrivacyMode] = useState(true);
 
-  const shellProps = useMemo(
-    () => ({ privacyMode, setPrivacyMode }),
-    [privacyMode]
-  );
-
   return (
-    <AppShell {...shellProps}>
+    <AppShell privacyMode={privacyMode} setPrivacyMode={setPrivacyMode}>
       <Routes>
         <Route path="/" element={<Navigate to="/journal" replace />} />
         <Route path="/journal" element={<JournalPage privacyMode={privacyMode} />} />
