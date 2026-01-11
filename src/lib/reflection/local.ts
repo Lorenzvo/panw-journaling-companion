@@ -58,6 +58,11 @@ import { localGuidedSession } from "./local/guidedResponse";
 export function generateLocalReflection(entryText: string, mem?: UserMemory): ReflectionOutput {
   const cleaned = normalize(entryText);
 
+  const finalize = (out: ReflectionOutput, safetyText: string) => ({
+    ...out,
+    mirror: ensureSafetyNote(out.mirror, safetyText),
+  });
+
   // Guided Sessions: reflect from the user's answers (not the prompt text).
   const guided = parseGuidedSession(cleaned);
   if (guided) {
@@ -86,20 +91,20 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
             "Next hour: “One kind thing I’ll do is…”",
           ],
           [
-		    "If you’re tired: I’m exhausted because ___.",
-		    "If you’re blank: The main thing on my mind is ___.",
+			"If you’re tired: I’m exhausted because ___.",
+			"If you’re blank: The main thing on my mind is ___.",
           ],
         ]),
       };
 
-      return { ...out, mirror: ensureSafetyNote(out.mirror, answerOnly || cleaned) };
+      return finalize(out, answerOnly || cleaned);
     }
 
     const guidedTone = detectTone(answerOnly);
     const guidedTopic = detectTopic(answerOnly);
     const guidedMemLine = maybeMemoryLine(mem, answerOnly || cleaned, guidedTone, guidedTopic);
     const out = localGuidedSession(guided, guidedMemLine);
-    return { ...out, mirror: ensureSafetyNote(out.mirror, answerOnly || cleaned) };
+    return finalize(out, answerOnly || cleaned);
   }
 
   if (looksLikeGibberish(cleaned)) {
@@ -110,13 +115,12 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
       question: "Do you want to write about your day, your mood, or one specific moment?",
       nudges: ["Finish: “Right now I feel…”", "Finish: “What’s on my mind is…”"],
     };
-    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+    return finalize(out, cleaned);
   }
 
   // “I’m too tired” handling: keep it tiny and non-demanding.
   if (detectTooTired(cleaned)) {
-    const out = localTooTired();
-    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+    return finalize(localTooTired(), cleaned);
   }
 
   const tone = detectTone(cleaned);
@@ -125,95 +129,77 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
 
   // Archetype: unwind / destress / colliding thoughts
   if ((tone === "negative" || tone === "mixed" || tone === "neutral") && detectUnwindIntent(cleaned)) {
-    const out = localUnwindDecompress(cleaned, memLine);
-    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+    return finalize(localUnwindDecompress(cleaned, memLine), cleaned);
   }
 
   // Archetype: pattern-seeking (applies even if the topic classifier doesn't catch it)
   if (detectPatternSeeking(cleaned)) {
-    const out = localPatternInsight(cleaned, memLine);
-    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+    return finalize(localPatternInsight(cleaned, memLine), cleaned);
   }
 
   if (tone === "positive" && detectGoodNothingNew(cleaned)) {
-    const out = localGoodNothingNew(memLine);
-    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+    return finalize(localGoodNothingNew(memLine), cleaned);
   }
 
-  if (topic === "new_to_journaling") return localNewToJournaling(cleaned, memLine);
-  if (topic === "mental_wellness") return localMentalWellness(cleaned, memLine);
+  if (topic === "new_to_journaling") return finalize(localNewToJournaling(cleaned, memLine), cleaned);
+  if (topic === "mental_wellness") return finalize(localMentalWellness(cleaned, memLine), cleaned);
   if (topic === "self_worth") {
-    const out = localSelfWorth(cleaned, memLine);
-    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+    return finalize(localSelfWorth(cleaned, memLine), cleaned);
   }
   if (topic === "finances" && (tone === "negative" || tone === "mixed")) {
     if (detectMoneyAffectingRelationships(cleaned)) {
-      const out = localMoneyAffectingRelationships(memLine);
-      return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+      return finalize(localMoneyAffectingRelationships(memLine), cleaned);
     }
-    const out = localFinances(cleaned, memLine);
-    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+    return finalize(localFinances(cleaned, memLine), cleaned);
   }
-  if (topic === "relationships" && tone === "positive") return localRelationshipsPositive(cleaned, memLine);
+  if (topic === "relationships" && tone === "positive") return finalize(localRelationshipsPositive(cleaned, memLine), cleaned);
   if (topic === "relationships") {
     if (detectSocialAvoidanceSpiral(cleaned)) {
-      const out = localSocialAvoidanceSpiral(cleaned, memLine);
-      return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+      return finalize(localSocialAvoidanceSpiral(cleaned, memLine), cleaned);
     }
     if (detectFamilyTension(cleaned)) {
-      const out = localFamilyTension(memLine);
-      return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+      return finalize(localFamilyTension(memLine), cleaned);
     }
     if (detectFriendLowBandwidth(cleaned)) {
-      const out = localFriendLowBandwidth(memLine);
-      return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+      return finalize(localFriendLowBandwidth(memLine), cleaned);
     }
     if (detectDatingFatigue(cleaned)) {
-      const out = localDatingFatigue(memLine);
-      return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+      return finalize(localDatingFatigue(memLine), cleaned);
     }
     if (detectRomanticUncertainty(cleaned)) {
-      const out = localRomanticUncertainty(memLine);
-      return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+      return finalize(localRomanticUncertainty(memLine), cleaned);
     }
     if (detectLonelyEvenWithPeople(cleaned)) {
-      const out = localLoneliness(memLine);
-      return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+      return finalize(localLoneliness(memLine), cleaned);
     }
     if (detectSolitudeVsIsolation(cleaned)) {
-      const out = localSolitudeVsIsolation(memLine);
-      return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+      return finalize(localSolitudeVsIsolation(memLine), cleaned);
     }
     if (detectComparisonBehind(cleaned)) {
-      const out = localComparisonBehind(memLine);
-      return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+      return finalize(localComparisonBehind(memLine), cleaned);
     }
     if (detectConflictAvoidance(cleaned)) {
-      const out = localConflictAvoidance(memLine);
-      return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+      return finalize(localConflictAvoidance(memLine), cleaned);
     }
     if (detectRelationshipAsEscape(cleaned)) {
-      const out = localRelationshipAsEscape(memLine);
-      return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+      return finalize(localRelationshipAsEscape(memLine), cleaned);
     }
 
-    const out = localRelationships(cleaned, memLine);
-    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+    return finalize(localRelationships(cleaned, memLine), cleaned);
   }
-  if (topic === "decisions") return localDecisions(memLine);
-  if (topic === "anxiety_rumination") return localAnxiety(cleaned, memLine);
-  if (topic === "wins_gratitude") return localWins(cleaned, memLine);
+  if (topic === "decisions") return finalize(localDecisions(memLine), cleaned);
+  if (topic === "anxiety_rumination") return finalize(localAnxiety(cleaned, memLine), cleaned);
+  if (topic === "wins_gratitude") return finalize(localWins(cleaned, memLine), cleaned);
 
-  if (topic === "food" && tone === "positive") return localFoodPositive(cleaned, memLine);
+  if (topic === "food" && tone === "positive") return finalize(localFoodPositive(cleaned, memLine), cleaned);
 
-  if (topic === "health" && tone === "positive") return localHealthPositive(cleaned, memLine);
+  if (topic === "health" && tone === "positive") return finalize(localHealthPositive(cleaned, memLine), cleaned);
 
-  if (topic === "work" && (tone === "negative" || tone === "mixed")) return localWorkStress(cleaned, memLine);
+  if (topic === "work" && (tone === "negative" || tone === "mixed")) return finalize(localWorkStress(cleaned, memLine), cleaned);
 
   // Positive hobby/joy entries (piano, art, skating, etc.) deserve richer local reflections.
   if (tone === "positive" && detectPositiveWinCategory(cleaned) === "hobby") {
-    const out = localHobbyJoy(cleaned, memLine);
-    return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
+    return finalize(localHobbyJoy(cleaned, memLine), cleaned);
   }
 
   if (tone === "positive") {

@@ -29,7 +29,7 @@ export function localGuidedSession(guided: ParsedGuidedSession, memLine: string 
     "neutral",
   ]);
 
-  function looksLikePlaceholderAnswer(a: string) {
+  function looksLikePlaceholderAnswer(a: string): boolean {
     const n = normalize(a);
     const lower = n.toLowerCase();
     if (!n) return true;
@@ -74,8 +74,8 @@ export function localGuidedSession(guided: ParsedGuidedSession, memLine: string 
         "Next hour: “One kind thing I’ll do is…”",
       ],
       [
-      "If you’re tired: I’m exhausted because ___.",
-      "If you’re blank: The main thing on my mind is ___.",
+        "If you’re tired: I’m exhausted because ___.",
+        "If you’re blank: The main thing on my mind is ___.",
       ],
     ]);
 

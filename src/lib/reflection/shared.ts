@@ -1,3 +1,5 @@
+// Shared helpers for reflection generation.
+
 const SAFETY_NOTE =
   "If you’re feeling like you might hurt yourself, you deserve real-time support. If you’re in the U.S., you can call or text **988**. If you’re elsewhere, I can help find local resources. If you’re in immediate danger, call your local emergency number.";
 
@@ -5,19 +7,18 @@ export function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-export function normalize(text: string) {
+export function normalize(text: string): string {
   return (text ?? "").trim().replace(/\s+/g, " ");
 }
 
 export function splitSentences(text: string): string[] {
   const raw = (text ?? "").replace(/\n+/g, " ").trim();
   if (!raw) return [];
-  // Avoid regex lookbehind for wider browser support.
   const matches = raw.match(/[^.!?]+(?:[.!?]+\s*|$)/g);
   return (matches ?? [raw]).map((s) => s.trim()).filter(Boolean);
 }
 
-export function snippet(text: string, max = 140) {
+export function snippet(text: string, max = 140): string {
   const t = normalize(text);
   if (t.length <= max) return t;
   return t.slice(0, Math.max(0, max - 1)).trimEnd() + "…";
@@ -30,12 +31,11 @@ export function extractAnchor(text: string, max = 140): string {
   const sentences = splitSentences(t);
   const candidates = sentences.length ? sentences : [t];
 
-  // Prefer “because/but/so/then” sentences—they often carry the meaning.
   const preferred = candidates.find((s) => /\b(because|but|so|then|and)\b/i.test(s)) ?? candidates[0];
   return snippet(preferred, max);
 }
 
-export function removeLeadingLabels(s: string) {
+export function removeLeadingLabels(s: string): string {
   return normalize(s)
     .replace(/^small\s*win\s*:\s*/i, "")
     .replace(/^win\s*:\s*/i, "")
@@ -45,11 +45,9 @@ export function removeLeadingLabels(s: string) {
 }
 
 export function softEcho(text: string, max = 130): string {
-  // A “paraphrase-ish” echo: we keep 1 concrete detail, but avoid quoting the user verbatim.
   const raw = removeLeadingLabels(text);
   if (!raw) return "";
   const s = extractAnchor(raw, max);
-  // Avoid returning the exact same casing/punctuation as the user wrote.
   const cleaned = normalize(s)
     .replace(/[“”"]/g, "")
     .replace(/\s*\.+\s*$/, "")
@@ -80,7 +78,6 @@ export function extractNamedHobbyDetail(text: string): { hobby?: string; detail?
     ? "gaming"
     : undefined;
 
-  // Composer / specific “flavor” details if present.
   const detail = /\bchopin\b/i.test(text)
     ? "Chopin"
     : /\b(debussy|mozart|beethoven|bach|rachmaninoff)\b/i.test(text)
@@ -90,7 +87,7 @@ export function extractNamedHobbyDetail(text: string): { hobby?: string; detail?
   return { hobby, detail };
 }
 
-export function looksLikeGibberish(text: string) {
+export function looksLikeGibberish(text: string): boolean {
   const t = normalize(text);
   if (!t) return true;
   if (t.length <= 2) return true;
@@ -98,7 +95,6 @@ export function looksLikeGibberish(text: string) {
   const letters = (t.match(/[a-z]/gi) ?? []).length;
   if (letters === 0) return true;
 
-  // Super low vowel ratio is a decent keysmash signal for longer strings.
   const vowels = (t.match(/[aeiou]/gi) ?? []).length;
   if (letters >= 8 && vowels / Math.max(1, letters) < 0.18) return true;
 
@@ -111,12 +107,12 @@ export function looksLikeGibberish(text: string) {
   return false;
 }
 
-export function looksLikeSelfHarm(text: string) {
+export function looksLikeSelfHarm(text: string): boolean {
   const t = text.toLowerCase();
   return /(suicid|kill myself|end my life|end it|self[- ]?harm|hurt myself|i want to die|want to die)/.test(t);
 }
 
-export function ensureSafetyNote(mirror: string, text: string) {
+export function ensureSafetyNote(mirror: string, text: string): string {
   if (!looksLikeSelfHarm(text)) return mirror;
   if (/\b988\b/.test(mirror)) return mirror;
   return [mirror, SAFETY_NOTE].filter(Boolean).join("\n\n");

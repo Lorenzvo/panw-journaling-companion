@@ -1,5 +1,5 @@
 import type { ReflectionOutput } from "../types";
-import { looksLikeSelfHarm, pick } from "../shared";
+import { pick } from "../shared";
 import { detectDismissiveShutdown } from "../detect";
 import { extractAnsweredDrainingPart } from "../memory";
 
@@ -19,7 +19,7 @@ export function localWorkStress(text: string, memLine: string | null): Reflectio
   ]);
 
   const mirror2 = answered
-    ? "And you already named the draining part clearly. That kind of clarity matters." 
+    ? "And you already named the draining part clearly. That kind of clarity matters."
     : dismissive
     ? pick([
         "That little shrug at the end feels like your brain trying to shut it down just to get through it.",
@@ -55,14 +55,9 @@ export function localWorkStress(text: string, memLine: string | null): Reflectio
         ])
       : undefined;
 
-  const safety =
-    looksLikeSelfHarm(text)
-      ? "If you’re feeling like you might hurt yourself, you deserve real-time support. If you’re in the U.S., you can call or text **988**. If you’re elsewhere, I can help find local resources. If you’re in immediate danger, call your local emergency number."
-      : null;
-
   return {
     mode: "local",
-    mirror: [mirror1, mirror2, memLine, safety].filter(Boolean).join("\n\n"),
+    mirror: [mirror1, mirror2, memLine].filter(Boolean).join("\n\n"),
     question,
     nudges,
   };

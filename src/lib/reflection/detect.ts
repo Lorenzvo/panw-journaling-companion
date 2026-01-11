@@ -1,6 +1,6 @@
 import type { Tone, Topic } from "./types";
 
-export function detectStartHelpIntent(text: string) {
+export function detectStartHelpIntent(text: string): boolean {
   const t = text.toLowerCase();
   return (
     /(where do i even start|where do i start|how do i start|dont know where to start|don't know where to start|don’t know where to start|where should i start|what do i write|help me journal|how do i journal|blank page|i'?m new to journaling|im new to journaling)/.test(
@@ -10,7 +10,7 @@ export function detectStartHelpIntent(text: string) {
   );
 }
 
-export function detectTooTired(text: string) {
+export function detectTooTired(text: string): boolean {
   const t = text.toLowerCase();
   const directJournal = /(too tired to journal|tired to journal|exhausted to journal|can't journal|cant journal)/.test(t);
   if (directJournal) return true;
@@ -22,7 +22,7 @@ export function detectTooTired(text: string) {
   return /(too tired|don'?t have the energy|dont have the energy|no energy|brain dead|i'?m done|im done|wiped|too exhausted)/.test(t);
 }
 
-export function detectSocialAvoidanceSpiral(text: string) {
+export function detectSocialAvoidanceSpiral(text: string): boolean {
   const t = text.toLowerCase();
   const aboutTexts = /\b(texts?|messages?|dms?|reply|respond|ignored|ignoring|left on read|ghost)\b/.test(t);
   const aboutFriends = /\b(friends?|people|everyone|them|they)\b/.test(t);
@@ -35,7 +35,7 @@ export function detectSocialAvoidanceSpiral(text: string) {
   return (aboutTexts || lowEnergyToTalk) && aboutFriends && spiral;
 }
 
-export function detectFamilyTension(text: string) {
+export function detectFamilyTension(text: string): boolean {
   const t = text.toLowerCase();
   const family = /\b(parents?|mom|mum|dad|family)\b/.test(t);
   const judged = /\b(judg|judged|judgment|critic|disappoint|weird|tense)\b/.test(t);
@@ -43,7 +43,7 @@ export function detectFamilyTension(text: string) {
   return family && (judged || lingering);
 }
 
-export function detectFriendLowBandwidth(text: string) {
+export function detectFriendLowBandwidth(text: string): boolean {
   const t = text.toLowerCase();
   const friends = /\b(friends?|people|everyone)\b/.test(t);
   const annoyed = /\b(annoy|annoyed|irritat|impatient|snappy|short with)\b/.test(t);
@@ -51,7 +51,7 @@ export function detectFriendLowBandwidth(text: string) {
   return friends && (annoyed || withdraw);
 }
 
-export function detectRomanticUncertainty(text: string) {
+export function detectRomanticUncertainty(text: string): boolean {
   const t = text.toLowerCase();
   const romantic = /\b(person i'?m seeing|someone i'?m seeing|seeing someone|talking to|crush|partner|relationship|dating)\b/.test(t);
   const mixed = /\b(sometimes|other times|on and off|back and forth)\b/.test(t);
@@ -60,7 +60,7 @@ export function detectRomanticUncertainty(text: string) {
   return romantic && anxious && (mixed || unclear);
 }
 
-export function detectDatingFatigue(text: string) {
+export function detectDatingFatigue(text: string): boolean {
   const t = text.toLowerCase();
   const dating = /\b(dating|apps?|swiping|first dates?)\b/.test(t);
   const exhausted = /\b(exhaust|exhausting|tired|burnt|burned out|burnout|worn down|over it|give up)\b/.test(t);
@@ -68,7 +68,7 @@ export function detectDatingFatigue(text: string) {
   return dating && exhausted && (wantsConnection || /\bbut\b/.test(t));
 }
 
-export function detectLonelyEvenWithPeople(text: string) {
+export function detectLonelyEvenWithPeople(text: string): boolean {
   const t = text.toLowerCase();
   const lonely = /\b(lonely|alone)\b/.test(t);
   const aroundPeople = /\b(talked to people|was with people|around people|saw people|hung out)\b/.test(t);
@@ -76,7 +76,7 @@ export function detectLonelyEvenWithPeople(text: string) {
   return lonely && aroundPeople && (unclear || /\beven though\b/.test(t));
 }
 
-export function detectSolitudeVsIsolation(text: string) {
+export function detectSolitudeVsIsolation(text: string): boolean {
   const t = text.toLowerCase();
   const alone = /\b(alone|by myself|on my own|solitude)\b/.test(t);
   const balance = /\b(part of me|another part|but)\b/.test(t);
@@ -84,21 +84,21 @@ export function detectSolitudeVsIsolation(text: string) {
   return alone && isolation && balance;
 }
 
-export function detectComparisonBehind(text: string) {
+export function detectComparisonBehind(text: string): boolean {
   const t = text.toLowerCase();
   const compare = /\b(friends?|people)\b/.test(t) && /\b(married|engaged|moving in|buying a house|kids|babies)\b/.test(t);
   const behind = /\b(falling behind|behind|late|left behind|not where i should be)\b/.test(t);
   return compare && behind;
 }
 
-export function detectConflictAvoidance(text: string) {
+export function detectConflictAvoidance(text: string): boolean {
   const t = text.toLowerCase();
   const avoid = /\b(avoid|don'?t bring it up|dont bring it up|keep it to myself|bite my tongue|stay quiet)\b/.test(t);
   const resentment = /\b(resent|resentful|builds up|bottl|hate that about myself)\b/.test(t);
   return avoid && resentment;
 }
 
-export function detectRelationshipAsEscape(text: string) {
+export function detectRelationshipAsEscape(text: string): boolean {
   const t = text.toLowerCase();
   const relationship = /\b(relationship|partner|dating)\b/.test(t);
   const escape = /\b(so i don'?t have to|so i dont have to|to avoid|escape|distract)\b/.test(t);
@@ -106,7 +106,7 @@ export function detectRelationshipAsEscape(text: string) {
   return relationship && escape && self;
 }
 
-export function detectMoneyAffectingRelationships(text: string) {
+export function detectMoneyAffectingRelationships(text: string): boolean {
   const t = text.toLowerCase();
   const money = /\b(finance|finances|money|rent|debt|bills|paycheck|pay|broke|budget)\b/.test(t);
   const people = /\b(people|friends?|family|partner|everyone|anyone)\b/.test(t);
@@ -114,7 +114,7 @@ export function detectMoneyAffectingRelationships(text: string) {
   return money && people && snappy;
 }
 
-export function detectUnwindIntent(text: string) {
+export function detectUnwindIntent(text: string): boolean {
   const t = text.toLowerCase();
   return (
     /\b(unwind|decompress|destress|de-stress|switch off|shut off|wind down|reset|relax)\b/.test(t) ||
@@ -123,12 +123,12 @@ export function detectUnwindIntent(text: string) {
   );
 }
 
-export function detectPatternSeeking(text: string) {
+export function detectPatternSeeking(text: string): boolean {
   const t = text.toLowerCase();
   return /\b(pattern|why do i|why am i|i always|every time|i keep|again and again|it keeps happening|i notice that|cycle)\b/.test(t);
 }
 
-export function detectMoodSwingIrritability(text: string) {
+export function detectMoodSwingIrritability(text: string): boolean {
   const t = text.toLowerCase();
   const swing = /\bsome days\b/.test(t) && /\bother days\b/.test(t);
   const irrit = /\b(irritat(ed|ing)?|snappy|on edge|short[- ]tempered|angry)\b/.test(t);
@@ -139,14 +139,14 @@ export function detectMoodSwingIrritability(text: string) {
   return irrit && (swing || unclear);
 }
 
-export function detectGoodNothingNew(text: string) {
+export function detectGoodNothingNew(text: string): boolean {
   const t = text.toLowerCase();
   const calmPositive = /\b(good|great|fine|ok|okay|nice|calm)\b/.test(t);
   const nothingMuch = /\b(nothing new|nothing much|nothing really|not much)\b/.test(t);
   return calmPositive && nothingMuch;
 }
 
-export function detectDismissiveShutdown(text: string) {
+export function detectDismissiveShutdown(text: string): boolean {
   const t = text.toLowerCase();
   return /\b(meh|whatever|idk|i\s*don'?t\s*care|doesn'?t\s*matter|eh)\b/.test(t);
 }
@@ -247,7 +247,7 @@ export function detectTopic(text: string): Topic {
   return "general";
 }
 
-export function detectPositiveWinCategory(text: string):
+export type PositiveWinCategory =
   | "gym"
   | "movement"
   | "hobby"
@@ -255,7 +255,9 @@ export function detectPositiveWinCategory(text: string):
   | "cooking"
   | "health_progress"
   | "life_admin"
-  | "general" {
+  | "general";
+
+export function detectPositiveWinCategory(text: string): PositiveWinCategory {
   const t = text.toLowerCase();
   if (/\b(gym|workout|weights|lifting)\b/.test(t)) return "gym";
   if (/\b(run|ran|walk|walked|jog|yoga|stretch|exercise)\b/.test(t)) return "movement";

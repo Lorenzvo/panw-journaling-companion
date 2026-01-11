@@ -2,7 +2,7 @@ import type { UserMemory } from "../../types/memory";
 import type { Tone, Topic } from "./types";
 import { pick } from "./shared";
 
-export function toKeywords(s: string): string[] {
+function toKeywords(s: string): string[] {
   return (s ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
@@ -73,15 +73,10 @@ export function selectRelevantMemory(
       "friends",
     ].includes(p.toLowerCase());
 
-  // Topic-based nudges: allow relevant coping even without literal overlap
-  // (e.g., work stress -> movement/breathing can still be relevant), but keep it conservative.
   const allowCopingByTopic =
     (topic === "work" || topic === "relationships" || topic === "anxiety_rumination" || topic === "mental_wellness") &&
     (tone === "negative" || tone === "mixed");
 
-  // People and hobbies can be helpful, but keep them highly relevant.
-  // - People: only surface when entry is relationship-focused (or direct overlap).
-  // - Hobbies: only surface when the entry is about unwinding/decompressing (or direct overlap).
   const allowPersonByTopic = topic === "relationships";
   const allowHobbyByIntent = Boolean(intents?.unwind);
 
@@ -105,7 +100,6 @@ export function maybeMemoryLine(mem: UserMemory | undefined, entryText: string, 
   const hasAnything = Boolean(relevant.coping || relevant.like || relevant.stressor || relevant.win);
   if (!hasAnything) return null;
 
-  // subtle but demo-visible
   const show = Math.random() < 0.18;
   if (!show) return null;
 
@@ -145,13 +139,11 @@ export function maybeMemoryLine(mem: UserMemory | undefined, entryText: string, 
   return null;
 }
 
-// Detect “I already answered the question” patterns
 export function extractAnsweredDrainingPart(text: string): string | null {
   const t = text.toLowerCase();
   const m = t.match(/(the most draining.*?is|most draining.*?is|it'?s the).*?(\.|$)/);
   if (!m) return null;
 
-  // grab a short slice of the original (not lowercased) for nicer echo
   const idx = t.indexOf(m[0]);
   if (idx === -1) return "that part about your time not feeling like yours";
   const originalSlice = text.slice(idx, Math.min(text.length, idx + 140)).trim();

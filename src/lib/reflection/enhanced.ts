@@ -121,9 +121,8 @@ Return ONLY JSON (no markdown, no commentary):
 }
 `.trim();
 
-  // Optional: abort/timeout so a hung request doesn’t stall UI
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  const timeout = globalThis.setTimeout(() => controller.abort(), 12000);
 
   try {
     if (import.meta.env.DEV) {
@@ -250,6 +249,6 @@ Return ONLY JSON (no markdown, no commentary):
   } catch {
     return generateLocalReflection(cleaned, mem);
   } finally {
-    window.clearTimeout(timeout);
+    globalThis.clearTimeout(timeout);
   }
 }

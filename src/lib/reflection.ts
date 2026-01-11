@@ -1,5 +1,5 @@
-// Compatibility wrapper for the reflection system.
-// The implementation lives in src/lib/reflection/*.
+// Public entrypoint for the reflection system.
+// Keep this file stable so imports don't change; implementation lives in src/lib/reflection/*.
 
 export type { ReflectionOutput } from "./reflection/types";
 
