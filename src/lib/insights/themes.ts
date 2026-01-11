@@ -25,14 +25,14 @@ function countMatches(t: string, patterns: RegExp[]) {
 }
 
 function ensurePeriod(s: string) {
-  const t = normalize(s);
+  const t = (s ?? "").trim().replace(/\s+/g, " ");
   if (!t) return "";
   return /[.!?]$/.test(t) ? t : `${t}.`;
 }
 
 function firstSentence(text: string) {
   const parts = sentenceSplit(text);
-  const first = parts[0] ?? normalize(text);
+  const first = parts[0] ?? (text ?? "").trim().replace(/\s+/g, " ");
   return ensurePeriod(first);
 }
 
@@ -52,14 +52,17 @@ export function signalPhrasesForBucket(bucketId: string, t: string) {
     case "work":
       pushIf(/\bdeadline\b/.test(t), "deadline");
       pushIf(/\blast minute\b/.test(t), "last-minute changes");
-      pushIf(/\bmeeting\b/.test(t), "meetings");
+      pushIf(/\bmeetings?\b/.test(t), "meetings");
       pushIf(/\bmidnight\b/.test(t), "late-night meetings");
       pushIf(/\bclient\b/.test(t), "clients");
       pushIf(/\bboss\b/.test(t), "boss/authority pressure");
       pushIf(/\bovertime\b/.test(t), "overtime");
       pushIf(/\bover the weekend\b|\bweekend\b/.test(t), "weekend work");
       pushIf(/\bno time\b/.test(t), "time squeeze");
+      pushIf(/\btime isn\'?t mine\b|\btime isnt mine\b/.test(t), "time squeeze");
+      pushIf(/\bback to back\b/.test(t), "back-to-back load");
       pushIf(/\bpressure\b/.test(t), "pressure");
+      pushIf(/\bnot getting much back\b|\bnot getting much out\b|\bwhat (am|i'?m) i working toward\b|\bdon\'?t even know what i\'?m working toward\b/.test(t), "effort without payoff");
       return out;
     case "sleep":
       pushIf(/\binsomnia\b/.test(t), "insomnia");
@@ -129,12 +132,12 @@ export function signalPhrasesForBucket(bucketId: string, t: string) {
 const BUCKETS: Bucket[] = [
   {
     id: "work",
-    label: "Work pressure & time",
+    label: "Work & energy",
     patterns: [
       /\bboss\b/i,
-      /\bmeeting\b/i,
-      /\bclient\b/i,
-      /\bdeadline\b/i,
+      /\bmeetings?\b/i,
+      /\bclients?\b/i,
+      /\bdeadlines?\b/i,
       /\bovertime\b/i,
       /\bweekend\b/i,
       /\blast minute\b/i,
@@ -143,31 +146,59 @@ const BUCKETS: Bucket[] = [
       /\bworkload\b/i,
       /\bjob\b/i,
       /\bshift\b/i,
-      /\bcoworker(s)?\b/i,
       /\bat work\b/i,
     ],
     score: (t) => {
       const idiomOnly = /\bwork (things|it) out\b|\bwork on (myself|me)\b/.test(t);
-      const hasStrong =
-        /\bboss\b|\bmeeting\b|\bclient\b|\bdeadline\b|\bovertime\b|\bworkload\b|\bcoworker(s)?\b|\bshift\b|\bat work\b|\bjob\b|\boffice\b/.test(
+      const nonJobWorkOnly = /\bit (didn\'?t|doesn\'?t|won\'?t) work\b|\bthat didn\'?t work\b|\bthis doesn\'?t work\b/.test(t);
+
+      const strongSignals =
+        /\bboss(es)?\b|\bmeetings?\b|\bclients?\b|\bdeadlines?\b|\bovertime\b|\bworkload\b|\bshift\b|\bat work\b|\bjob\b|\boffice\b|\bback to back\b|\btime isn\'?t mine\b|\btime isnt mine\b/.test(
           t
         );
 
-      if (idiomOnly && !hasStrong) return 0;
       const workWord = /\bwork\b/.test(t);
-      const safeWork = workWord && (/\bat work\b|\bworkload\b|\bworkday\b|\bjob\b|\boffice\b/.test(t) || hasStrong);
+      const explicitWorkContext = /\bat work\b|\bworkload\b|\bworkday\b|\bjob\b|\boffice\b|\bshift\b/.test(t);
+
+      // Work-as-meaning/effort signal (e.g., "putting so much into work" / "what am I working toward")
+      const workMeaningSignals =
+        /\b(putting|pouring) (so much|a lot) (into|in) work\b|\bnot getting much back\b|\bnot getting much out\b|\bwhat (am|i'?m) i working toward\b|\bdon\'?t even know what i\'?m working toward\b|\bworking toward anymore\b|\bno longer know what i\'?m working toward\b/.test(
+          t
+        );
+
+      // Generic work word, but framed like a job/day context.
+      const jobFraming = /\bwork (today|was|is|has been|again)\b|\bafter work\b|\bbefore work\b|\binto work\b|\bfrom work\b|\bat my job\b/.test(
+        t
+      );
+
+      const relievedFromDeadlines = /\b(not (think|thinking) about deadlines?)\b|\bwithout thinking about deadlines?\b/.test(t);
+
+      // Avoid false positives from idioms like "work it out".
+      if (idiomOnly && !(strongSignals || explicitWorkContext)) return 0;
+      if (nonJobWorkOnly && !(strongSignals || explicitWorkContext || workMeaningSignals || jobFraming)) return 0;
 
       let s = 0;
-      if (safeWork) s += 1;
+      if (strongSignals || (workWord && (explicitWorkContext || jobFraming || workMeaningSignals)) || workMeaningSignals) s += 1;
+
       s += countMatches(t, [
-        /\bboss\b/i,
-        /\bmeeting\b/i,
-        /\bclient\b/i,
-        /\bdeadline\b/i,
+        /\bboss(es)?\b/i,
+        /\bmeetings?\b/i,
+        /\bclients?\b/i,
+        ...(relievedFromDeadlines ? [] : [/\bdeadlines?\b/i]),
         /\bno time\b/i,
+        /\bno time to\b/i,
+        /\bdidn\'?t even get time\b/i,
+        /\bdid not even get time\b/i,
+        /\btime isn\'?t mine\b/i,
+        /\btime isnt mine\b/i,
+        /\bback to back\b/i,
         /\bpressure\b/i,
         /\bovertime\b/i,
         /\bworkload\b/i,
+        /\bnot getting much back\b/i,
+        /\bnot getting much out\b/i,
+        /\bdon\'?t even know what i\'?m working toward\b/i,
+        /\bwhat (am|i'?m) i working toward\b/i,
       ]);
       return s;
     },
@@ -188,6 +219,7 @@ const BUCKETS: Bucket[] = [
       /\brelationship\b/i,
       /\bfamily\b/i,
       /\bmom\b|\bdad\b|\bsister\b|\bbrother\b/i,
+      /\bcoworker(s)?\b/i,
       /\bhang out\b/i,
     ],
     score: (t) => {
@@ -196,11 +228,12 @@ const BUCKETS: Bucket[] = [
       if (/\bfriend(s)?\b/.test(t)) s += 2;
       if (/\bfamily\b|\bmom\b|\bdad\b|\bsister\b|\bbrother\b/.test(t)) s += 2;
       if (/\bpartner\b|\brelationship\b/.test(t)) s += 2;
+      if (/\bcoworker(s)?\b/.test(t)) s += 1.5;
       if (/\bhang out\b/.test(t)) s += 1.5;
       if (!isWorkCall && (/\bcall(ed)?\b|\btext(ed)?\b/.test(t))) {
         if (
           /\b(my|a) (friend|mom|dad|sister|brother|partner)\b/.test(t) ||
-          /\bfriend\b|\bfamily\b|\bpartner\b|\brelationship\b|\bhang out\b/.test(t)
+          /\bfriend\b|\bfamily\b|\bpartner\b|\brelationship\b|\bcoworker(s)?\b|\bhang out\b/.test(t)
         ) {
           s += 1;
         }
@@ -635,7 +668,7 @@ function themeSummaryFromBucket(bucketId: string, bucketLabel: string, themeAvg:
   const repeats = matchCount >= 4;
 
   const insight = themeInsightFromBucket(bucketId, themeAvg, sampleText, matchCount);
-  const insightClause = normalize(firstSentence(insight)).replace(/[.!?]$/, "").trim();
+  const insightClause = firstSentence(insight).replace(/[.!?]$/, "").trim();
 
   // Requirement: every summary is exactly 2 sentences:
   // (1) general description of the theme, (2) how it shows up for THIS user recently.
@@ -649,73 +682,73 @@ function themeSummaryFromBucket(bucketId: string, bucketLabel: string, themeAvg:
     case "romance_dating":
       return twoSentenceSummary(
         "Romance and dating can bring a mix of hope, uncertainty, and longing for connection.",
-        `${personalizationLead}${signalBit}, and the emotional tone reads like ambivalence rather than a simple yes/no; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        `${personalizationLead}${signalBit}, and the emotional tone reads like ambivalence rather than a simple yes/no; ${insightClause}.`
       );
 
     case "loneliness_solitude":
       return twoSentenceSummary(
         "Loneliness and solitude are different experiences, and it’s normal to feel pulled between connection and independence.",
-        `${personalizationLead}${signalBit}, suggesting you’re paying attention to the line between restorative alone time and isolating drift; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        `${personalizationLead}${signalBit}, suggesting you’re paying attention to the line between restorative alone time and isolating drift; ${insightClause}.`
       );
 
     case "family_dynamics":
       return twoSentenceSummary(
         "Family dynamics often carry history and subtext, which can make even normal conversations feel loaded.",
-        `${personalizationLead}${signalBit}, and what stands out is how the feeling lingers even without a clear incident; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        `${personalizationLead}${signalBit}, and what stands out is how the feeling lingers even without a clear incident; ${insightClause}.`
       );
 
     case "friendship_tension":
       return twoSentenceSummary(
         "Friendship tension is often less about the people and more about capacity, stress, and unmet needs.",
-        `${personalizationLead}${signalBit}, and it reads like low bandwidth affecting patience more than a lack of care; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        `${personalizationLead}${signalBit}, and it reads like low bandwidth affecting patience more than a lack of care; ${insightClause}.`
       );
 
     case "financial_relationships":
       return twoSentenceSummary(
         "Money stress isn’t just numbers; it can leak into patience, closeness, and how safe you feel with other people.",
-        `${personalizationLead}${signalBit}, and the pattern is the stress spilling over into how you relate to others day-to-day; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        `${personalizationLead}${signalBit}, and the pattern is the stress spilling over into how you relate to others day-to-day; ${insightClause}.`
       );
 
     case "relationships":
       return twoSentenceSummary(
         "Relationships are a major part of emotional life, and it’s normal for connection to feel both nourishing and complicated at different times.",
-        `${personalizationLead}${signalBit}, and your writing suggests you’re tracking the push-pull between closeness, distance, and feeling understood; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        `${personalizationLead}${signalBit}, and your writing suggests you’re tracking the push-pull between closeness, distance, and feeling understood; ${insightClause}.`
       );
 
     case "finances":
       return twoSentenceSummary(
         "Money and stability affect more than budgets; they influence safety, mood, and decision-making.",
-        `${personalizationLead}${signalBit}, and it reads like uncertainty is doing more harm than the numbers themselves; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        `${personalizationLead}${signalBit}, and it reads like uncertainty is doing more harm than the numbers themselves; ${insightClause}.`
       );
 
     case "work":
       return twoSentenceSummary(
-        "Work pressure often shows up as time pressure, expectation, and lack of recovery.",
-        `${personalizationLead}${signalBit}, and it reads like the drain is coming from constant demand rather than one-off problems; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        "Work and energy tend to show up through time pressure, expectations, and how much you can recover.",
+        `${personalizationLead}${signalBit}, and it reads like the drain is coming from constant demand rather than one-off problems; ${insightClause}.`
       );
 
     case "sleep":
       return twoSentenceSummary(
         "Sleep and energy shape what’s possible on any given day.",
-        `${personalizationLead}${signalBit}, and when energy dips, other stressors seem to hit harder; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        `${personalizationLead}${signalBit}, and when energy dips, other stressors seem to hit harder; ${insightClause}.`
       );
 
     case "selfcare":
       return twoSentenceSummary(
         "Self-care and grounding are the small stabilizers that change how the next hour feels.",
-        `${personalizationLead}${signalBit}, and the pattern suggests you’re learning which tiny resets actually shift your baseline; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        `${personalizationLead}${signalBit}, and the pattern suggests you’re learning which tiny resets actually shift your baseline; ${insightClause}.`
       );
 
     case "selfworth":
       return twoSentenceSummary(
         "Self-talk matters because it changes how you interpret everything else.",
-        `${personalizationLead}${signalBit}, and the sharpness seems to rise when you’re depleted or under pressure; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        `${personalizationLead}${signalBit}, and the sharpness seems to rise when you’re depleted or under pressure; ${insightClause}.`
       );
 
     default:
       return twoSentenceSummary(
         `${bucketLabel} is a recurring life context that can shape mood and capacity.`,
-        `${personalizationLead}${signalBit}, and the way you describe it suggests the context matters more than the label; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
+        `${personalizationLead}${signalBit}, and the way you describe it suggests the context matters more than the label; ${insightClause}.`
       );
   }
 }

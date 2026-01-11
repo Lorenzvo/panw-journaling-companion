@@ -1806,7 +1806,26 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
 
   if (tone === "positive") {
     const short = cleaned.length < 40;
-    const anchor = extractAnchor(cleaned, 150);
+    const hasWorkSignals = /\b(deadline|deadlines|meeting|meetings|client|boss|work|coworker|coworkers|overtime|workload|time isn\'?t mine|time isnt mine)\b/.test(
+      cleaned
+    );
+    const hasPeopleSignals = /\b(friend|friends|coworker|coworkers|partner|family|lunch|talk|chat|hang out|hung out)\b/.test(
+      cleaned
+    );
+    const hasReliefSignals = /\b(for a bit|break|breathe|relief|reset|lighter|easy|easier|calm|calmer|nice|good)\b/.test(
+      cleaned
+    );
+
+    const detailLine = (() => {
+      if (hasWorkSignals && hasPeopleSignals)
+        return "It reads like you got a pocket of connection and relief inside the work noise.";
+      if (hasWorkSignals && hasReliefSignals)
+        return "Even with work in the background, you got a moment that felt steadier and more like yours.";
+      if (hasPeopleSignals)
+        return "Connection is doing something real for you here — it shifts the tone, not just the schedule.";
+      if (hasReliefSignals) return "That kind of ease is worth noticing. It’s information.";
+      return null;
+    })();
     const out: ReflectionOutput = short
       ? {
           mode: "local",
@@ -1816,7 +1835,7 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
               "Nice. Even a simple “good” day deserves a little space.",
               "I’m glad there was something good in there.",
             ]),
-            anchor ? `What I’m picking up is: ${softEcho(anchor, 120)}.` : null,
+            detailLine,
             memLine,
           ]
             .filter(Boolean)
@@ -1836,7 +1855,7 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
               "That reads like something that actually gave you a little back.",
               "I’m glad you let this land enough to write it down.",
             ]),
-            anchor ? `What I’m holding onto is the feeling of it: ${softEcho(anchor, 140).toLowerCase()}.` : null,
+            detailLine,
             memLine,
           ]
             .filter(Boolean)
@@ -1848,7 +1867,21 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
   }
 
   if (tone === "negative" || tone === "mixed") {
-    const anchor = extractAnchor(cleaned, 160);
+    const hasWorkSignals = /\b(deadline|deadlines|meeting|meetings|client|boss|work|coworker|coworkers|overtime|workload|time isn\'?t mine|time isnt mine)\b/.test(
+      cleaned
+    );
+    const hasRelationshipSignals = /\b(friend|friends|partner|relationship|family|mom|dad|sister|brother)\b/.test(cleaned);
+    const hasTimeSqueeze = /\b(no time|back to back|all day|didn\'?t even|get time to|time isn\'?t mine|time isnt mine)\b/.test(
+      cleaned
+    );
+
+    const detailLine = (() => {
+      if (hasWorkSignals && hasTimeSqueeze) return "It feels less like one bad moment and more like relentless demand on your time.";
+      if (hasWorkSignals) return "Work pressure is sitting on this pretty heavily.";
+      if (hasRelationshipSignals) return "The people side of this feels tender and complicated, not simple.";
+      if (hasTimeSqueeze) return "The time squeeze itself reads like the sharp edge here.";
+      return "It sounds like a lot is stacking at once.";
+    })();
     const out: ReflectionOutput = {
       mode: "local",
       mirror: [
@@ -1857,7 +1890,7 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
           "I hear how much this is taking out of you.",
           "That’s a lot to carry at once.",
         ]),
-        anchor ? `The part I’m hearing most is: ${softEcho(anchor, 150)}.` : null,
+        detailLine,
         memLine,
       ]
         .filter(Boolean)
@@ -1879,7 +1912,10 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
   }
 
   // neutral fallback
-  const anchor = extractAnchor(cleaned, 160);
+  const hasWorkSignals = /\b(deadline|deadlines|meeting|meetings|client|boss|work|coworker|coworkers|overtime|workload|time isn\'?t mine|time isnt mine)\b/.test(
+    cleaned
+  );
+  const hasRelationshipSignals = /\b(friend|friends|partner|relationship|family|mom|dad|sister|brother)\b/.test(cleaned);
   const out: ReflectionOutput = {
     mode: "local",
     mirror: [
@@ -1887,7 +1923,11 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
         "Got it. I’m here with you.",
         "Okay. I’m with you."
       ]),
-      anchor ? `If we zoom in, it’s this: ${softEcho(anchor, 150)}.` : null,
+      hasWorkSignals
+        ? "If you want, we can zoom in on what about work is most draining — time, expectations, or pace."
+        : hasRelationshipSignals
+        ? "If you want, we can zoom in on the people part — what you needed, and what you got instead."
+        : "If you want, we can zoom in on the one piece that felt most important today.",
       memLine,
     ]
       .filter(Boolean)

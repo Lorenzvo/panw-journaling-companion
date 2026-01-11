@@ -191,14 +191,6 @@ function ThemeCard({
       {expanded && (
         <div className="mt-2 text-xs text-slate-700 leading-relaxed space-y-2">
           <div>{theme.summary}</div>
-          {theme.examples?.length ? (
-            <div className="rounded-xl border border-slate-200 bg-white/70 p-2">
-              <div className="text-[11px] font-semibold text-slate-700">Example</div>
-              <div className="mt-1 text-[11px] text-slate-600">
-                “{theme.examples[0]}{theme.examples[0].length >= 160 ? "…" : ""}”
-              </div>
-            </div>
-          ) : null}
         </div>
       )}
     </button>
