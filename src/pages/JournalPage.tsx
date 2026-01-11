@@ -4,7 +4,7 @@ import { Card } from "../components/Card";
 import { cn, formatDateLong } from "../lib/utils";
 import { loadEntries, loadReflections, saveEntries, saveReflections } from "../lib/storage";
 import type { JournalEntry, Reflection } from "../types/journal";
-import { loadMemory, saveMemory, extractMemoryFromText, buildMemoryFromEntries } from "../lib/memory";
+import { loadMemory, saveMemory, buildMemoryFromEntries } from "../lib/memory";
 import type { UserMemory } from "../types/memory";
 import { quoteOfTheDay } from "../lib/quote";
 import { generateLocalReflection, generateEnhancedReflection } from "../lib/reflection";
@@ -36,6 +36,7 @@ const STARTER_CHIPS = [
 ];
 
 export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
+  const enhancedAvailable = Boolean(import.meta.env.VITE_OPENAI_API_KEY);
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
@@ -68,7 +69,15 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
 
   const [memory, setMemory] = useState<UserMemory>(() => {
     const m = loadMemory();
-    if (!m.coping.length && !m.likes.length && !m.stressors.length && !m.wins.length && entries.length) {
+    if (
+      !m.coping.length &&
+      !m.likes.length &&
+      !m.people.length &&
+      !m.hobbies.length &&
+      !m.stressors.length &&
+      !m.wins.length &&
+      entries.length
+    ) {
       const built = buildMemoryFromEntries(entries);
       saveMemory(built);
       return built;
@@ -179,12 +188,8 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     };
 
     const nextEntries = [entry, ...entries];
-    setEntries(nextEntries);
-    saveEntries(nextEntries);
-
-    const nextMem = extractMemoryFromText(trimmed, memory);
-    setMemory(nextMem);
-    saveMemory(nextMem);
+    // Keep memory strictly tied to current entries (no stale accumulation).
+    persistAll(nextEntries, reflections);
 
     setSelectedEntryId(entry.id);
     setEditingEntryId(entry.id);
@@ -229,9 +234,11 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
   }
 
   async function reflectOnText(entryId: string, entryText: string) {
+    // Rebuild from persisted entries so edits fully replace old text signals.
+    const memNow = buildMemoryFromEntries(loadEntries());
     const out = privacyMode
-      ? generateLocalReflection(entryText, memory)
-      : await generateEnhancedReflection(entryText, memory);
+      ? generateLocalReflection(entryText, memNow)
+      : await generateEnhancedReflection(entryText, memNow);
 
     const reflection: Reflection = {
       entryId,
@@ -339,6 +346,32 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
       ? "Private (local)"
       : modeLabel;
 
+  const reflectionBadge = (() => {
+    const mode = selectedReflection?.mode;
+    if (mode === "enhanced") {
+      return {
+        label: "Enhanced",
+        className: "bg-slate-900 text-white border-slate-900",
+        title: "Generated via the OpenAI API",
+      };
+    }
+
+    // If Privacy Mode is off but we still ended up local, it likely fell back due to missing quota/rate limit/etc.
+    if (!privacyMode && mode === "local") {
+      return {
+        label: "Local (fallback)",
+        className: "bg-amber-50 text-amber-900 border-amber-200",
+        title: "Enhanced failed; fell back to local reflection. Check the console/network tab for details.",
+      };
+    }
+
+    return {
+      label: "Local",
+      className: "bg-white/70 text-slate-700 border-slate-200",
+      title: "Generated locally in your browser",
+    };
+  })();
+
   const editorModeLabel = editingEntryId ? "Editing entry" : "New entry";
   const reflectHint = editingEntryId
     ? "Update & Reflect will refresh the reflection for this day."
@@ -400,7 +433,9 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
           <div className="mt-1 text-xs text-slate-600">
             {privacyMode
               ? "Runs locally in your browser. No network calls."
-              : "Uses an external LLM to generate reflections (prototype)."}
+              : enhancedAvailable
+              ? "Uses an external LLM to generate reflections (prototype)."
+              : "Enhanced is OFF because VITE_OPENAI_API_KEY is not set (falling back to local)."}
           </div>
         </Card>
       </div>
@@ -497,7 +532,18 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
             <div className="text-sm font-semibold text-slate-900">
               Reflection {selectedEntryId === "draft" ? "(draft)" : ""}
             </div>
-            <div className="text-xs text-slate-500">{reflectionModeLabel}</div>
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                  reflectionBadge.className
+                )}
+                title={reflectionBadge.title}
+              >
+                {reflectionBadge.label}
+              </span>
+              <div className="text-xs text-slate-500">{reflectionModeLabel}</div>
+            </div>
           </div>
 
           <p className="mt-2 whitespace-pre-line text-sm text-slate-700 leading-relaxed">

@@ -24,6 +24,24 @@ function countMatches(t: string, patterns: RegExp[]) {
   return c;
 }
 
+function ensurePeriod(s: string) {
+  const t = normalize(s);
+  if (!t) return "";
+  return /[.!?]$/.test(t) ? t : `${t}.`;
+}
+
+function firstSentence(text: string) {
+  const parts = sentenceSplit(text);
+  const first = parts[0] ?? normalize(text);
+  return ensurePeriod(first);
+}
+
+function twoSentenceSummary(general: string, personal: string) {
+  const a = ensurePeriod(firstSentence(general));
+  const b = ensurePeriod(firstSentence(personal));
+  return `${a} ${b}`.trim();
+}
+
 export function signalPhrasesForBucket(bucketId: string, t: string) {
   const out: string[] = [];
   const pushIf = (cond: boolean, label: string) => {
@@ -63,6 +81,32 @@ export function signalPhrasesForBucket(bucketId: string, t: string) {
       pushIf(/\bfriend\b/.test(t), "friends");
       pushIf(/\bpartner\b|\brelationship\b/.test(t), "partner/relationship");
       pushIf(/\bavoid\b|\bignore\b/.test(t), "avoidance");
+      return out;
+    case "romance_dating":
+      pushIf(/\b(seeing someone|person i'?m seeing|someone i'?m seeing|dating|apps?|swiping|first date|situationship|relationship)\b/.test(t), "romance/dating");
+      pushIf(/\b(anxious|uneasy|nervous|uncertain|mixed signals|can'?t tell|cant tell)\b/.test(t), "uncertainty/anxiety");
+      pushIf(/\b(exhausted|burnt|burned out|burnout|over it|give up)\b/.test(t), "dating fatigue");
+      pushIf(/\b(married|engaged|moving in together)\b/.test(t), "milestone comparison");
+      return out;
+    case "loneliness_solitude":
+      pushIf(/\b(lonely|unseen|left out)\b/.test(t), "loneliness");
+      pushIf(/\b(even though i talked to people|around people but)\b/.test(t), "lonely around people");
+      pushIf(/\b(part of me likes it|another part worries|worry i'?m isolating|worried i'?m isolating)\b/.test(t), "solitude vs isolation");
+      return out;
+    case "family_dynamics":
+      pushIf(/\b(parents?|mom|mum|dad|family)\b/.test(t), "family conversations");
+      pushIf(/\b(judg|judged|critic|disappoint|tone)\b/.test(t), "feeling judged");
+      pushIf(/\b(stuck with me|lingered|can'?t shake|still sitting with me)\b/.test(t), "it lingered");
+      return out;
+    case "friendship_tension":
+      pushIf(/\bfriends?\b/.test(t), "friends");
+      pushIf(/\b(annoy|annoyed|impatient|irritat|short with|snappy)\b/.test(t), "low bandwidth / irritation");
+      pushIf(/\b(didn'?t want to be around anyone|dont want to be around anyone|wanted to be alone)\b/.test(t), "withdrawing");
+      return out;
+    case "financial_relationships":
+      pushIf(/\b(money|rent|debt|bills|budget|paycheck)\b/.test(t), "money stress");
+      pushIf(/\b(short with|snappy|snap|irritable|tense)\b/.test(t), "leaking into patience");
+      pushIf(/\b(people|friends?|family|partner)\b/.test(t), "with people");
       return out;
     case "finances":
       pushIf(/\brent\b/.test(t), "rent");
@@ -168,6 +212,141 @@ const BUCKETS: Bucket[] = [
       if (t.includes("hang out") || t.includes("caught up")) return "Connection reads as a real reset in your week, not just a social detail.";
       return "People are showing up as an emotional variable — energizing sometimes, complicated other times.";
     },
+  },
+
+  // New: Relationship-focused sub-themes (a single entry can hit multiple buckets)
+  {
+    id: "romance_dating",
+    label: "Romance & dating",
+    patterns: [
+      /\b(seeing someone|person i'?m seeing|someone i'?m seeing|dating|date|dates|app|apps|swiping|situationship|relationship|partner|crush)\b/i,
+      /\b(anxious|anxiety|uneasy|nervous|uncertain|mixed signals|can'?t tell|cant tell)\b/i,
+      /\b(exhaust|burnt|burned out|burnout|worn down|over it|give up)\b/i,
+      /\b(married|engaged|moving in together)\b/i,
+    ],
+    score: (t) => {
+      const romanticContext =
+        /\b(seeing someone|person i'?m seeing|someone i'?m seeing|dating|date|dates|apps?|swiping|situationship|crush|relationship|partner)\b/.test(t);
+      const uncertainty = /\b(anxious|anxiety|uneasy|nervous|uncertain|mixed signals|can'?t tell|cant tell|no clear reason)\b/.test(t);
+      const fatigue = /\b(exhaust|exhausting|tired|burnt|burned out|burnout|worn down|over it|give up)\b/.test(t);
+      const wantsConnection = /\b(want connection|want closeness|want a relationship|want someone)\b/.test(t);
+      const milestoneCompare = /\b(friends?|people)\b/.test(t) && /\b(married|engaged|moving in together)\b/.test(t) && /\b(behind|falling behind|left behind)\b/.test(t);
+
+      let s = 0;
+      if (romanticContext) s += 2;
+      if (uncertainty) s += 1.5;
+      if (fatigue) s += 1.5;
+      if (wantsConnection) s += 1;
+      if (milestoneCompare) s += 2;
+
+      // Avoid labeling purely on one word like "date" with no emotional signal.
+      if (romanticContext && (uncertainty || fatigue || wantsConnection || milestoneCompare)) return s;
+      return 0;
+    },
+    describe: () => "Romance and dating can bring a mix of hope, uncertainty, and longing for connection.",
+  },
+  {
+    id: "loneliness_solitude",
+    label: "Loneliness & solitude",
+    patterns: [
+      /\b(lonely|loneliness|unseen|left out)\b/i,
+      /\b(even though i talked to people|around people)\b/i,
+      /\b(alone|by myself|on my own|solitude)\b/i,
+      /\b(isolat|isolating|withdrawing)\b/i,
+      /\b(part of me|another part)\b/i,
+    ],
+    score: (t) => {
+      const lonely = /\b(lonely|loneliness|unseen|left out)\b/.test(t);
+      const aroundPeople = /\b(talked to people|was with people|around people|hung out|saw people)\b/.test(t);
+      const unclearWhy = /\b(don'?t know why|dont know why|no clear reason)\b/.test(t);
+
+      const alone = /\b(alone|by myself|on my own|solitude)\b/.test(t);
+      const isolatingWorry = /\b(isolat|isolating|withdrawing)\b/.test(t);
+      const ambivalence = /\b(part of me|another part|but)\b/.test(t);
+      const likesSolitude = /\b(part of me likes|i like it|enjoy it)\b/.test(t);
+
+      let s = 0;
+      // Loneliness despite contact (requires more than just the word “lonely”)
+      if (lonely && aroundPeople) s += 3;
+      if (lonely && (unclearWhy || /\beven though\b/.test(t))) s += 1;
+
+      // Solitude vs isolation (requires ambivalence + isolation signal)
+      if (alone && isolatingWorry && ambivalence) s += 3;
+      if (likesSolitude && isolatingWorry) s += 1;
+
+      return s;
+    },
+    describe: () => "Loneliness and solitude are different experiences, and it’s normal to feel pulled between connection and independence.",
+  },
+  {
+    id: "family_dynamics",
+    label: "Family dynamics",
+    patterns: [
+      /\b(parents?|mom|mum|dad|family)\b/i,
+      /\b(judg|judged|critic|disappoint|tense|weird)\b/i,
+      /\b(stuck with me|lingered|can'?t shake|kept thinking)\b/i,
+      /\b(call|talked)\b/i,
+    ],
+    score: (t) => {
+      const family = /\b(parents?|mom|mum|dad|family)\b/.test(t);
+      const contact = /\b(call|called|talked|conversation)\b/.test(t);
+      const judged = /\b(judg|judged|judgment|critic|disappoint|tone|weird|tense)\b/.test(t);
+      const lingering = /\b(stuck with me|lingered|can'?t shake|kept thinking|still thinking|longer than i expected)\b/.test(t);
+
+      if (!family) return 0;
+      let s = 0;
+      if (contact) s += 1;
+      if (judged) s += 2;
+      if (lingering) s += 2;
+
+      // Require at least two signals beyond the family word itself.
+      return s >= 3 ? s : 0;
+    },
+    describe: () => "Family dynamics often carry history and subtext, which can make even “normal” conversations feel loaded.",
+  },
+  {
+    id: "friendship_tension",
+    label: "Friendship tension",
+    patterns: [
+      /\bfriends?\b/i,
+      /\b(annoy|annoyed|impatient|irritat|short with|snappy)\b/i,
+      /\b(didn'?t want to be around|dont want to be around|wanted to be alone)\b/i,
+      /\b(drained|low bandwidth|no energy)\b/i,
+    ],
+    score: (t) => {
+      const friends = /\bfriends?\b/.test(t);
+      const irritation = /\b(annoy|annoyed|impatient|irritat|short with|snappy)\b/.test(t);
+      const withdraw = /\b(didn'?t really want to be around|did not really want to be around|don'?t want to be around|dont want to be around|wanted to be alone)\b/.test(t);
+      const lowBandwidth = /\b(drained|low bandwidth|no energy|too tired|wiped)\b/.test(t);
+
+      if (!friends) return 0;
+      let s = 0;
+      if (irritation) s += 2;
+      if (withdraw) s += 2;
+      if (lowBandwidth) s += 1;
+
+      // Avoid labeling just because "friends" appears.
+      return s >= 2 ? s : 0;
+    },
+    describe: () => "Friendship tension is often less about the people and more about capacity, stress, and unmet needs.",
+  },
+  {
+    id: "financial_relationships",
+    label: "Financial stress affecting relationships",
+    patterns: [
+      /\b(money|rent|debt|bills|budget|paycheck)\b/i,
+      /\b(short with|snappy|snap|irritable|tense)\b/i,
+      /\b(people|friends?|family|partner|relationship)\b/i,
+    ],
+    score: (t) => {
+      const money = /\b(finance|finances|money|rent|debt|bills|paycheck|pay|broke|budget)\b/.test(t);
+      const people = /\b(people|friends?|family|partner|relationship)\b/.test(t);
+      const leak = /\b(short with|snappy|snap|irritable|tense|impatient)\b/.test(t);
+
+      if (!(money && people && leak)) return 0;
+      return 4;
+    },
+    describe: () => "Money stress isn’t just numbers; it can leak into patience, closeness, and how safe you feel with other people.",
   },
   {
     id: "selfcare",
@@ -321,14 +500,14 @@ function themeInsightFromBucket(bucketId: string, themeAvg: number, sampleText: 
   const heavy = themeAvg <= -0.9;
   const light = themeAvg >= 0.9;
 
-  const adviceTiny = "If it helps, aim for the tiny version (5–10 minutes). It counts.";
+  const gentleTiny = "Sometimes the tiniest version of care is the most realistic.";
 
   switch (bucketId) {
     case "work":
       if (heavy) {
         return load >= 2
-          ? "When work becomes time-pressure + stacked expectations, your tone drops fast. A useful experiment is to name the single bottleneck (deadline/meetings/people) and reduce just that one thing."
-          : "Work shows up here as emotional load, not just tasks. The useful question is what part costs you most (uncertainty, people, or volume) so you can target that lever.";
+          ? "When work becomes time-pressure plus stacked expectations, your tone drops fast. The hard part seems less about effort and more about the constant pull on your time."
+          : "Work shows up here as emotional load, not just tasks. The pattern seems to be volume plus expectation, not a single isolated moment.";
       }
       if (light)
         return "When work feels structured/contained, your tone tends to lift. It may be worth noticing what made the day feel more manageable (clarity, pacing, support).";
@@ -338,13 +517,13 @@ function themeInsightFromBucket(bucketId: string, themeAvg: number, sampleText: 
 
     case "sleep":
       if (hasSleepDebt || heavy)
-        return "Low sleep/low energy tends to magnify everything else. If you can’t fix sleep, aim for a smaller win (earlier wind-down, a 10-minute rest, or one less demand).";
+        return "Low sleep/low energy tends to magnify everything else. When capacity is low, the same problems can feel louder and less solvable.";
       if (light)
         return "When energy is better, other themes feel easier. Protecting recovery seems high-leverage for you.";
       return "Energy is a capacity ceiling — it changes what’s possible on a given day.";
 
     case "selfcare":
-      if (heavy) return `When things pile up, self-care is often the first thing that drops — and then the day feels sharper. ${adviceTiny}`;
+      if (heavy) return `When things pile up, self-care is often the first thing that drops — and then the day feels sharper. ${gentleTiny}`;
       if (light)
         return "Small resets (movement, breathing, outside) show up as mood stabilizers for you. They seem to change the next hour, not just the day.";
       return "These are your stabilizers — the things that make everything else more workable.";
@@ -360,17 +539,40 @@ function themeInsightFromBucket(bucketId: string, themeAvg: number, sampleText: 
 
     case "finances":
       if (heavy)
-        return "Money stress reads like safety stress. It can drain motivation because your brain treats it as urgency. A small stabilizer is turning “everything” into one next action (one bill, one call, one plan).";
+        return "Money stress reads like safety stress. It can drain motivation because your brain treats it as urgency, even when you’re trying to stay calm.";
       if (light)
         return "When stability improves, your tone tends to lift. It’s worth tracking which kinds of stability (buffer, clarity, income, support) matter most.";
       return "Money shows up here as emotional load. Clarity and small steps tend to help more than rumination.";
 
     case "selfworth":
       if (hasSelfCrit || heavy)
-        return "Harsh self-talk tends to cluster when you’re depleted or under pressure. Often that’s a signal you need support or recovery — not more self-attack.";
+        return "Harsh self-talk tends to cluster when you’re depleted or under pressure. It often shows up as a warning light, not a verdict about you.";
       if (light)
         return "When self-talk is kinder, everything is easier to carry. It’s worth noticing what conditions make that possible (rest, progress, connection).";
       return "Your inner voice shows up as an active factor. Tracking when it turns sharp can reveal your triggers.";
+
+    case "romance_dating":
+      return heavy
+        ? "Connection is showing up alongside uncertainty. That mix can feel activating even when nothing is clearly ‘wrong’."
+        : "Romance/dating shows up as a place where hope and nerves can coexist. The useful detail is how your body reacts, not just what happens on paper.";
+
+    case "loneliness_solitude":
+      return heavy
+        ? "This looks like loneliness that isn’t fixed by being around people. That usually points to missing closeness or feeling understood, not just missing company."
+        : "There’s ambivalence here: solitude can be restorative and also a little worrying. Noticing that balance is a sign you’re learning what you actually need.";
+
+    case "family_dynamics":
+      return heavy
+        ? "Family shows up here through subtext and judgment, not big events. That can linger because it touches identity and approval."
+        : "Family dynamics can be emotionally loud even when the conversation is ‘fine’. It’s the history that makes it sticky.";
+
+    case "friendship_tension":
+      return heavy
+        ? "This reads like low bandwidth leaking into irritation. That doesn’t mean you don’t care; it usually means you’re stretched."
+        : "Friend dynamics show up as an energy story. When capacity is low, even normal social contact can feel like too much.";
+
+    case "financial_relationships":
+      return "Money stress is showing up not only as worry, but as tension with people. That spillover is common when your nervous system is on high alert.";
 
     case "hobbies":
     case "outdoors":
@@ -425,148 +627,92 @@ function sentenceSplit(text: string) {
   return out;
 }
 
-function tokenKey(text: string) {
-  return normalize(text)
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/g)
-    .filter(Boolean)
-    .filter((w) => w.length >= 3)
-    .filter((w) => !["the", "and", "but", "when", "this", "that", "with", "your", "you", "week", "shows", "showed", "show"].includes(w));
-}
-
-function jaccard(a: string[], b: string[]) {
-  const sa = new Set(a);
-  const sb = new Set(b);
-  let inter = 0;
-  for (const x of sa) if (sb.has(x)) inter++;
-  const union = sa.size + sb.size - inter;
-  return union === 0 ? 0 : inter / union;
-}
-
-function dedupeSentences(text: string) {
-  const sentences = sentenceSplit(text);
-  const kept: string[] = [];
-  const keptKeys: string[][] = [];
-
-  for (const s of sentences) {
-    const keys = tokenKey(s);
-    const flat = keys.join(" ");
-    if (!flat) {
-      kept.push(s);
-      keptKeys.push(keys);
-      continue;
-    }
-
-    let redundant = false;
-    for (let i = 0; i < kept.length; i++) {
-      const prevKeys = keptKeys[i];
-      const sim = jaccard(keys, prevKeys);
-      if (sim >= 0.78) {
-        redundant = true;
-        break;
-      }
-      const prevNorm = normalize(kept[i]);
-      const curNorm = normalize(s);
-      if (prevNorm === curNorm) {
-        redundant = true;
-        break;
-      }
-      if ((prevNorm.includes(curNorm) || curNorm.includes(prevNorm)) && Math.abs(prevNorm.length - curNorm.length) <= 30) {
-        redundant = true;
-        break;
-      }
-    }
-
-    if (!redundant) {
-      kept.push(s);
-      keptKeys.push(keys);
-    }
-  }
-
-  return kept.join(" ").replace(/\s+/g, " ").trim();
-}
-
 function themeSummaryFromBucket(bucketId: string, bucketLabel: string, themeAvg: number, sampleText: string, matchCount: number) {
   const t = normalize(sampleText);
   const signals = unique(signalPhrasesForBucket(bucketId, t)).slice(0, 2);
-  const signalClause = signals.length ? ` — especially around ${humanJoin(signals)}` : "";
-
-  const heavy = themeAvg <= -0.9;
-  const light = themeAvg >= 0.9;
+  const signalClause = signals.length ? `especially around ${humanJoin(signals)}` : "";
   const repeats = matchCount >= 4;
 
   const insight = themeInsightFromBucket(bucketId, themeAvg, sampleText, matchCount);
 
+  // Requirement: every summary is exactly 2 sentences:
+  // (1) general description of the theme, (2) how it shows up for THIS user recently.
+  // Keep it growth-oriented and non-diagnostic; avoid generic filler.
+  const personalizationLead = repeats ? "In your recent entries, this came up repeatedly" : "In your recent entries, this showed up";
+  const signalBit = signalClause ? ` (${signalClause})` : "";
+
   switch (bucketId) {
-    case "sleep": {
-      const opener = repeats
-        ? `Sleep and energy kept coming up this week${signalClause}.`
-        : `Sleep and energy showed up as a real limiter${signalClause}.`;
-      const bridge = heavy
-        ? "When you’re depleted, the same problems tend to feel louder."
-        : "Energy acts like a ceiling — it quietly shapes what’s realistic on a given day.";
-      return dedupeSentences(`${opener} ${bridge} ${insight}`);
-    }
-    case "work": {
-      const opener = repeats
-        ? `Work pressure repeated this week${signalClause}.`
-        : `Work came up as pressure on your time${signalClause}.`;
-      const bridge = heavy
-        ? "It reads like your time was being pulled around by other people’s priorities."
-        : light
-        ? "When work feels contained, you tend to sound more like yourself."
-        : "Work seems to act as a background driver for the whole day.";
-      return dedupeSentences(`${opener} ${bridge} ${insight}`);
-    }
-    case "selfcare": {
-      const opener = repeats
-        ? `Your small resets showed up repeatedly${signalClause}.`
-        : `Self-care and grounding showed up as the “small reset” layer${signalClause}.`;
-      const bridge = heavy
-        ? "When the week gets tight, this is often what drops first — and then the day feels harsher."
-        : light
-        ? "Even a small reset seems to shift your next hour, not just your day."
-        : "These are the levers that make the rest of life more workable.";
-      return dedupeSentences(`${opener} ${bridge} ${insight}`);
-    }
-    case "relationships": {
-      const opener = repeats
-        ? `Connection kept showing up this week${signalClause}.`
-        : `Relationships and connection showed up as a real mood lever${signalClause}.`;
-      const bridge = heavy
-        ? "People dynamics can change your emotional temperature quickly."
-        : light
-        ? "When connection is good, it reads like a genuine reset for you."
-        : "It’s not just social context — it’s part of how the week felt.";
-      return dedupeSentences(`${opener} ${bridge} ${insight}`);
-    }
-    case "finances": {
-      const opener = repeats
-        ? `Money/stability kept coming up${signalClause}.`
-        : `Money showed up less like math and more like stability${signalClause}.`;
-      const bridge = heavy
-        ? "When it spikes, it reads like safety stress — the kind that drains motivation."
-        : light
-        ? "When things feel steadier, your writing tends to lift."
-        : "Clarity tends to help more than spinning on it.";
-      return dedupeSentences(`${opener} ${bridge} ${insight}`);
-    }
-    case "selfworth": {
-      const opener = repeats
-        ? `Self-talk came up repeatedly${signalClause}.`
-        : `Your inner voice showed up as part of the week${signalClause}.`;
-      const bridge = heavy
-        ? "When the tone is heavy, the self-criticism tends to get louder too."
-        : light
-        ? "When the self-talk is kinder, everything reads easier to carry."
-        : "Noticing when it turns sharp is often the first clue to what you need.";
-      return dedupeSentences(`${opener} ${bridge} ${insight}`);
-    }
-    default: {
-      const opener = repeats ? `${bucketLabel} kept showing up this week${signalClause}.` : `${bucketLabel} showed up in your writing${signalClause}.`;
-      const bridge = heavy ? "It tended to appear on heavier days." : light ? "It tended to appear on lighter days." : "The context around it matters more than the label.";
-      return dedupeSentences(`${opener} ${bridge} ${insight}`);
-    }
+    case "romance_dating":
+      return twoSentenceSummary(
+        "Romance and dating can bring a mix of hope, uncertainty, and longing for connection.",
+        `${personalizationLead}${signalBit}, and the emotional tone reads like ambivalence rather than a simple yes/no. ${insight}`
+      );
+
+    case "loneliness_solitude":
+      return twoSentenceSummary(
+        "Loneliness and solitude are different experiences, and it’s normal to feel pulled between connection and independence.",
+        `${personalizationLead}${signalBit}, suggesting you’re paying attention to the line between restorative alone time and isolating drift. ${insight}`
+      );
+
+    case "family_dynamics":
+      return twoSentenceSummary(
+        "Family dynamics often carry history and subtext, which can make even normal conversations feel loaded.",
+        `${personalizationLead}${signalBit}, and what stands out is how the feeling lingers even without a clear “incident.” ${insight}`
+      );
+
+    case "friendship_tension":
+      return twoSentenceSummary(
+        "Friendship tension is often less about the people and more about capacity, stress, and unmet needs.",
+        `${personalizationLead}${signalBit}, and it reads like low bandwidth affecting patience more than a lack of care. ${insight}`
+      );
+
+    case "financial_relationships":
+      return twoSentenceSummary(
+        "Money stress isn’t just numbers; it can leak into patience, closeness, and how safe you feel with other people.",
+        `${personalizationLead}${signalBit}, and the pattern is the stress spilling over into how you relate to others day-to-day. ${insight}`
+      );
+
+    case "relationships":
+      return twoSentenceSummary(
+        "Relationships are a major part of emotional life, and it’s normal for connection to feel both nourishing and complicated at different times.",
+        `${personalizationLead}${signalBit}, and your writing suggests you’re tracking the push-pull between closeness, distance, and feeling understood. ${insight}`
+      );
+
+    case "finances":
+      return twoSentenceSummary(
+        "Money and stability affect more than budgets; they influence safety, mood, and decision-making.",
+        `${personalizationLead}${signalBit}, and it reads like uncertainty is doing more harm than the numbers themselves. ${insight}`
+      );
+
+    case "work":
+      return twoSentenceSummary(
+        "Work pressure often shows up as time pressure, expectation, and lack of recovery.",
+        `${personalizationLead}${signalBit}, and it reads like the drain is coming from constant demand rather than one-off problems. ${insight}`
+      );
+
+    case "sleep":
+      return twoSentenceSummary(
+        "Sleep and energy shape what’s possible on any given day.",
+        `${personalizationLead}${signalBit}, and when energy dips, other stressors seem to hit harder. ${insight}`
+      );
+
+    case "selfcare":
+      return twoSentenceSummary(
+        "Self-care and grounding are the small stabilizers that change how the next hour feels.",
+        `${personalizationLead}${signalBit}, and the pattern suggests you’re learning which tiny resets actually shift your baseline. ${insight}`
+      );
+
+    case "selfworth":
+      return twoSentenceSummary(
+        "Self-talk matters because it changes how you interpret everything else.",
+        `${personalizationLead}${signalBit}, and the sharpness seems to rise when you’re depleted or under pressure. ${insight}`
+      );
+
+    default:
+      return twoSentenceSummary(
+        `${bucketLabel} is a recurring life context that can shape mood and capacity.`,
+        `${personalizationLead}${signalBit}, and the way you describe it suggests the context matters more than the label. ${insight}`
+      );
   }
 }
 

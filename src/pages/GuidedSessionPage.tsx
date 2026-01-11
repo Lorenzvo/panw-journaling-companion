@@ -5,8 +5,7 @@ import { cn, formatDateLong } from "../lib/utils";
 import { SESSION_MODES, type SessionMode, type SessionModeId } from "../lib/guidedSessionPrompts";
 import { loadEntries, loadReflections, saveEntries, saveReflections } from "../lib/storage";
 import type { JournalEntry, Reflection } from "../types/journal";
-import type { UserMemory } from "../types/memory";
-import { extractMemoryFromText, loadMemory, saveMemory } from "../lib/memory";
+import { buildMemoryFromEntries, saveMemory } from "../lib/memory";
 import { generateEnhancedReflection, generateLocalReflection } from "../lib/reflection";
 import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, Sparkles } from "lucide-react";
 
@@ -133,8 +132,8 @@ export function GuidedSessionPage({ privacyMode }: { privacyMode: boolean }) {
       const nextEntries = [entry, ...existingEntries];
       saveEntries(nextEntries);
 
-      const mem = loadMemory() as UserMemory;
-      const nextMem = extractMemoryFromText(entryText, mem);
+      // Keep memory strictly derived from the current saved entries.
+      const nextMem = buildMemoryFromEntries(nextEntries);
       saveMemory(nextMem);
 
       const shouldUseEnhanced = !privacyMode && enhancedAvailable;
@@ -371,7 +370,28 @@ export function GuidedSessionPage({ privacyMode }: { privacyMode: boolean }) {
 
           {resultReflection ? (
             <Card className="p-4">
-              <div className="text-sm font-semibold text-slate-900">Reflection</div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-slate-900">Reflection</div>
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                    resultReflection.mode === "enhanced"
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : !privacyMode
+                      ? "bg-amber-50 text-amber-900 border-amber-200"
+                      : "bg-white/70 text-slate-700 border-slate-200"
+                  )}
+                  title={
+                    resultReflection.mode === "enhanced"
+                      ? "Generated via the OpenAI API"
+                      : !privacyMode
+                      ? "Enhanced failed; fell back to local reflection. Check the console/network tab for details."
+                      : "Generated locally in your browser"
+                  }
+                >
+                  {resultReflection.mode === "enhanced" ? "Enhanced" : !privacyMode ? "Local (fallback)" : "Local"}
+                </span>
+              </div>
 
               <div className="mt-2 whitespace-pre-wrap text-sm text-slate-700 leading-relaxed">
                 {resultReflection.mirror}

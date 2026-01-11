@@ -1,9 +1,10 @@
 // src/pages/InsightsPage.tsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "../components/Card";
 import { loadEntries } from "../lib/storage";
-import { loadMemory } from "../lib/memory";
+import { buildMemoryFromEntries, loadMemory, saveMemory } from "../lib/memory";
 import { cn, formatDateLong } from "../lib/utils";
+import { installInsightsNetworkGuard } from "../lib/insights/onDeviceGuard";
 import type { JournalEntry } from "../types/journal";
 import {
   buildMoodTimeline,
@@ -216,8 +217,13 @@ function entriesForDay(entries: JournalEntry[], dateKey: string) {
 }
 
 export function InsightsPage() {
-  const entries = useMemo(() => loadEntries(), []);
-  const memory = useMemo(() => loadMemory(), []);
+  useEffect(() => {
+    const uninstall = installInsightsNetworkGuard();
+    return () => uninstall();
+  }, []);
+
+  const [entries, setEntries] = useState<JournalEntry[]>(() => loadEntries());
+  const [memory, setMemory] = useState(() => loadMemory());
   const todayLabel = useMemo(() => formatDateLong(new Date()), []);
 
   const timeline = useMemo(() => buildMoodTimeline(entries, 14), [entries]);
@@ -253,6 +259,23 @@ export function InsightsPage() {
         <div className="mt-2 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-700">
           <span className="font-semibold">Privacy note:</span>
           <span>Insights are generated locally on your device (no journal text leaves your browser).</span>
+        </div>
+
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => {
+              const currentEntries = loadEntries();
+              const rebuilt = buildMemoryFromEntries(currentEntries);
+              saveMemory(rebuilt);
+              setEntries(currentEntries);
+              setMemory(rebuilt);
+            }}
+            className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            title="Recomputes memory from your current saved entries so edits/removals are reflected immediately."
+          >
+            Rebuild memory from entries
+          </button>
         </div>
       </div>
 

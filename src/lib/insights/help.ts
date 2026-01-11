@@ -7,6 +7,7 @@ const ALLOWED_COPING = new Set([
   "going on walks",
   "getting some movement",
   "listening to music",
+  "playing music",
   "taking a shower/bath",
   "resting/sleep",
   "breathing/meditation",
@@ -19,12 +20,13 @@ const ALLOWED_COPING = new Set([
 function canonicalHelp(label: string) {
   const t = label.toLowerCase();
   if (/(walk|walking|movement|move|exercise|run|gym|workout|stretch)/.test(t)) return "Movement";
-  if (/(music|song|playlist|listen)/.test(t)) return "Music";
+  if (/(music|song|playlist|listen|piano|guitar|drums|instrument|sing|singing|kpop)/.test(t)) return "Music";
+  if (/(journal|journaling|write|writing|reflect|reflection)/.test(t)) return "Writing it out";
   if (/(sleep|rest|nap|relax|relaxing|do nothing|nothing|chill)/.test(t)) return "Rest";
   if (/(friend|friends|family|hang out|talk|talking|call|text|catch up|see people)/.test(t)) return "Connection";
-  if (/(write|journal|reflect)/.test(t)) return "Writing it out";
   if (/(read|reading|book|novel)/.test(t)) return "Reading";
   if (/(tv|show|series|movie|cinema|theater|anime|drama)/.test(t)) return "Shows & movies";
+  if (/(game|gaming|video game|playstation|xbox|switch)/.test(t)) return "Games";
   if (/(cook|cooking|bake|baking|meal|dinner|lunch|breakfast)/.test(t)) return "Food";
   if (/(clean|cleaning|tidy|organize|laundry|dishes)/.test(t)) return "Resetting your space";
   if (/(pray|prayer|church|service|spiritual)/.test(t)) return "Faith";
@@ -43,7 +45,10 @@ function pickSpecificLike(likes: string[] | undefined, re: RegExp) {
 }
 
 export function whatHelped(memory: UserMemory, timeline: DayPoint[]): HelpItem[] {
-  const raw = (memory.coping ?? []).filter((x) => ALLOWED_COPING.has(x)).slice(0, 10);
+  const rawCoping = (memory.coping ?? []).filter((x) => ALLOWED_COPING.has(x)).slice(0, 12);
+  const rawHobbies = (memory.hobbies ?? []).slice(0, 12);
+  const rawLikes = (memory.likes ?? []).slice(0, 12);
+  const raw = [...rawCoping, ...rawHobbies, ...rawLikes].filter(Boolean).slice(0, 28);
   const canon = new Map<string, number>();
 
   for (const r of raw) {
@@ -59,23 +64,57 @@ export function whatHelped(memory: UserMemory, timeline: DayPoint[]): HelpItem[]
     const likes = memory.likes ?? [];
     switch (label) {
       case "Movement":
-        return { label: "Movement & reset", detail: "This tends to help you come back to yourself, especially when your head feels loud." };
+        return {
+          label: "Movement & reset",
+          detail:
+            "Movement shows up as a nervous-system reset for you — it helps your mind un-clench without needing to ‘figure it out’ first.",
+        };
       case "Music":
-        return { label: "Music", detail: "A quick way to change the texture of the moment without needing to solve anything." };
+        return {
+          label: "Music (listening or playing)",
+          detail:
+            "Music shows up as a fast ‘mood re-texture’ — sometimes just hearing it helps, and sometimes making it (like piano) can quiet your mind.",
+        };
       case "Rest":
-        return { label: "Rest & recovery", detail: "When energy is low, recovery usually helps more than pushing harder." };
+        return {
+          label: "Rest & recovery",
+          detail:
+            "Rest isn’t a reward — it’s a reset. When energy is low, recovery usually helps more than pushing harder.",
+        };
       case "Connection":
-        return { label: "Connection", detail: "When it’s available, people can soften the edge of a hard day." };
+        return {
+          label: "Connection",
+          detail:
+            "Talking it out / being with people shows up as a pressure-release valve — even one safe person can change the day.",
+        };
       case "Writing it out":
-        return { label: "Writing it out", detail: "Getting it out of your head seems to reduce the pressure a bit." };
+        return {
+          label: "Writing it out",
+          detail:
+            "Journaling shows up as a way to turn ‘spinning thoughts’ into something you can actually hold and sort.",
+        };
       case "Reading":
-        return { label: "Reading", detail: "This shows up as a quiet focus-switch for you — attention moves from rumination to a storyline or idea." };
+        return {
+          label: "Reading",
+          detail:
+            "Reading looks like a gentle focus-switch — attention moves from rumination to a storyline, an idea, or a calmer pace.",
+        };
       case "Shows & movies": {
         // Only show this if the user explicitly mentioned it in their likes.
         const fav = pickSpecificLike(likes, /(anime|show|series|movie|drama)/i);
         return {
           label: "A familiar watch",
           detail: fav ? `You tend to reset with something familiar (like “${fav}”).` : "",
+        };
+      }
+      case "Games": {
+        const fav = pickSpecificLike(likes, /(game|gaming|video game|switch|playstation|xbox)/i);
+        return {
+          label: "Games",
+          detail:
+            fav
+              ? `Games can give your brain something structured to hold onto (you’ve mentioned “${fav}”).`
+              : "Games can be a clean ‘attention channel’ — structured focus without emotional labor.",
         };
       }
       case "Food": {
@@ -88,21 +127,49 @@ export function whatHelped(memory: UserMemory, timeline: DayPoint[]): HelpItem[]
       case "Warm drink":
         return { label: "A warm drink", detail: "A simple stabilizer — a small comfort that can shift the next hour." };
       case "Resetting your space":
-        return { label: "Resetting your space", detail: "Cleaning/organizing shows up as a control-lever: small order outside can reduce chaos inside." };
+        return {
+          label: "Resetting your space",
+          detail:
+            "Cleaning/organizing shows up as a control-lever: small order outside can reduce chaos inside.",
+        };
       case "Faith":
-        return { label: "Faith & grounding", detail: "Prayer/church shows up as a way to reconnect to meaning and calm when the week gets loud." };
+        return {
+          label: "Faith & grounding",
+          detail:
+            "Prayer/church shows up as a way to reconnect to meaning and steadiness when the week gets loud.",
+        };
       case "Therapy":
         return { label: "Therapy & support", detail: "Support shows up as a practice, not a last resort — it’s part of how you stay resourced." };
       case "Animals":
-        return { label: "Animals", detail: "Animals can be instant nervous-system comfort: presence without pressure, attention without judgment." };
+        return {
+          label: "Animals",
+          detail:
+            "Animals can be instant nervous-system comfort: presence without pressure, attention without judgment.",
+        };
       case "Outdoors":
-        return { label: "Outside time", detail: "Even brief time outdoors can change the tone of the next hour — less ‘stuck in your head’." };
+        return {
+          label: "Outside time",
+          detail:
+            "Outside time (beach/forest/trails) can change the tone of the next hour — less ‘stuck in your head’, more present.",
+        };
       case "Play":
-        return { label: "Play / movement-for-fun", detail: "Dance/swimming/skating show up differently than exercise — more joy, less pressure." };
+        return {
+          label: "Play / movement-for-fun",
+          detail:
+            "Dance/swimming/skating show up differently than exercise — more joy, less pressure, more ‘feel alive’.",
+        };
       case "Photography":
-        return { label: "Making / capturing", detail: "Photos shift your attention outward. That can be grounding when your thoughts are looping." };
+        return {
+          label: "Making / capturing",
+          detail:
+            "Photos/creating shift your attention outward. That can be grounding when your thoughts are looping.",
+        };
       case "Exploring":
-        return { label: "Exploring", detail: "Exploring the city/forest/travel reads like ‘fresh air for the brain’ — novelty can loosen a stuck mood." };
+        return {
+          label: "Exploring",
+          detail:
+            "Exploring the city/forest/travel reads like ‘fresh air for the brain’ — novelty can loosen a stuck mood.",
+        };
       default:
         return { label, detail: "This has shown up as something you reach for when you need steadiness." };
     }
