@@ -11,6 +11,9 @@ import { generateLocalReflection, generateEnhancedReflection } from "../lib/refl
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Trash2, PencilLine, Plus, ChevronDown } from "lucide-react";
 import { TutorialModal } from "../components/TutorialModal";
+import { topBucketsForText } from "../lib/insights/themes";
+import { ThemeChips } from "../components/ThemeChips";
+import { ThemeOrbit } from "../components/ThemeOrbit";
 
 
 function uid() {
@@ -139,6 +142,17 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     return reflections.find((r) => r.entryId === selectedEntryId) ?? null;
   }, [reflections, selectedEntryId]);
 
+  const reflectionByEntryId = useMemo(() => {
+    const m = new Map<string, Reflection>();
+    for (const r of reflections) m.set(r.entryId, r);
+    return m;
+  }, [reflections]);
+
+  const selectedThemes = useMemo(() => {
+    if (!selectedEntryId) return [];
+    return reflectionByEntryId.get(selectedEntryId)?.themes ?? [];
+  }, [reflectionByEntryId, selectedEntryId]);
+
   function persistAll(nextEntries: JournalEntry[], nextReflections: Reflection[]) {
     setEntries(nextEntries);
     saveEntries(nextEntries);
@@ -248,6 +262,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
       question: out.question ?? "",
       nudges: out.nudges ?? [],
       mode: out.mode,
+      themes: topBucketsForText(entryText, 4).map((b) => ({ id: b.id, label: b.label })),
     };
 
     const nextReflections = [...reflections.filter((r) => r.entryId !== entryId), reflection];
@@ -458,6 +473,22 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
           </button>
         </div>
 
+        {selectedThemes.length ? (
+          <div className="mt-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold text-slate-500">Themes (from last reflect)</div>
+                <div className="mt-1">
+                  <ThemeChips themes={selectedThemes} max={6} />
+                </div>
+              </div>
+            </div>
+            <div className="mt-3">
+              <ThemeOrbit themes={selectedThemes} />
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-3 flex flex-wrap gap-2">
           {STARTER_CHIPS.map((c) => (
             <button
@@ -632,6 +663,14 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
                           >
                             <div className="text-xs text-slate-500">{new Date(e.createdAt).toLocaleTimeString()}</div>
                             <div className="mt-1 text-sm text-slate-800 line-clamp-2">{e.text}</div>
+                            {reflectionByEntryId.get(e.id)?.themes?.length ? (
+                              <ThemeChips
+                                themes={reflectionByEntryId.get(e.id)?.themes ?? []}
+                                max={3}
+                                size="xs"
+                                className="mt-2"
+                              />
+                            ) : null}
                           </button>
 
                           <div className="flex gap-2">

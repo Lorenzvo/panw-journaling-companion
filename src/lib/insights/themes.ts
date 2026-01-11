@@ -483,7 +483,8 @@ const BUCKETS: Bucket[] = [
 ];
 
 export function topBucketsForText(t: string, topN = 2) {
-  const scored = BUCKETS.map((b) => ({ id: b.id, label: b.label, s: b.score(t) }))
+  const nt = normalize(t);
+  const scored = BUCKETS.map((b) => ({ id: b.id, label: b.label, s: b.score(nt) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s)
     .slice(0, topN);
@@ -510,16 +511,16 @@ function themeInsightFromBucket(bucketId: string, themeAvg: number, sampleText: 
           : "Work shows up here as emotional load, not just tasks. The pattern seems to be volume plus expectation, not a single isolated moment.";
       }
       if (light)
-        return "When work feels structured/contained, your tone tends to lift. It may be worth noticing what made the day feel more manageable (clarity, pacing, support).";
+        return "When work feels structured/contained, your tone tends to lift. Days with clarity, pacing, or support read as more manageable for you.";
       return matchCount >= 3
-        ? "This theme repeats — it might be a primary stress channel. Watch for what reliably triggers it and what reliably softens it."
+        ? "This theme repeats — it might be a primary stress channel. It often has reliable triggers and reliable softeners." 
         : "Work appears here as a context driver. The details matter more than the label.";
 
     case "sleep":
       if (hasSleepDebt || heavy)
         return "Low sleep/low energy tends to magnify everything else. When capacity is low, the same problems can feel louder and less solvable.";
       if (light)
-        return "When energy is better, other themes feel easier. Protecting recovery seems high-leverage for you.";
+        return "When energy is better, other themes feel easier. Recovery seems to change what’s emotionally carryable for you.";
       return "Energy is a capacity ceiling — it changes what’s possible on a given day.";
 
     case "selfcare":
@@ -530,18 +531,18 @@ function themeInsightFromBucket(bucketId: string, themeAvg: number, sampleText: 
 
     case "relationships":
       if (hasAvoid)
-        return "There’s a push‑pull in connection. When avoidance shows up, it can be protective — but it can also increase loneliness. Worth noticing which it is in the moment.";
+        return "There’s a push‑pull in connection. When avoidance shows up, it can be protective — and it can also increase loneliness; the difference is often how you feel afterward.";
       if (heavy)
-        return "People-related stress tends to change your emotional temperature quickly. The useful question is whether the pain is distance, conflict, or feeling unseen.";
+        return "People-related stress tends to change your emotional temperature quickly. It seems to cluster around distance, conflict, or feeling unseen.";
       if (light)
-        return "Connecting with people reads like a real reset for you — not just “social”, but something that changes your baseline. If you want to keep that effect, a small check‑in can count (even if it’s not a big hangout).";
+        return "Connecting with people reads like a real reset for you — not just social, but something that changes your baseline.";
       return "Relationships are a strong mood lever — both positively and negatively depending on context.";
 
     case "finances":
       if (heavy)
         return "Money stress reads like safety stress. It can drain motivation because your brain treats it as urgency, even when you’re trying to stay calm.";
       if (light)
-        return "When stability improves, your tone tends to lift. It’s worth tracking which kinds of stability (buffer, clarity, income, support) matter most.";
+        return "When stability improves, your tone tends to lift. Different kinds of stability (buffer, clarity, income, support) seem to matter in different ways for you.";
       return "Money shows up here as emotional load. Clarity and small steps tend to help more than rumination.";
 
     case "selfworth":
@@ -554,7 +555,7 @@ function themeInsightFromBucket(bucketId: string, themeAvg: number, sampleText: 
     case "romance_dating":
       return heavy
         ? "Connection is showing up alongside uncertainty. That mix can feel activating even when nothing is clearly ‘wrong’."
-        : "Romance/dating shows up as a place where hope and nerves can coexist. The useful detail is how your body reacts, not just what happens on paper.";
+        : "Romance/dating shows up as a place where hope and nerves can coexist. A detail that seems to matter is how your body reacts, not just what happens on paper.";
 
     case "loneliness_solitude":
       return heavy
@@ -578,12 +579,12 @@ function themeInsightFromBucket(bucketId: string, themeAvg: number, sampleText: 
     case "outdoors":
       if (light) return "These moments tend to soften your day. They’re not ‘extra’ — they look like fuel.";
       if (heavy)
-        return "When the week gets heavy, these tend to disappear. If you want change, reintroducing a tiny version can be a high-return move.";
+        return "When the week gets heavy, these tend to disappear. That pattern can matter because these moments often act like fuel.";
       return "These are ‘texture’ themes — they can quietly shift your mood without needing a big life change.";
 
     case "therapy":
       return heavy
-        ? "Support shows up when things are hard — that’s not failure, that’s strategy. The question is what you want support to do (validate, plan, process, regulate)."
+        ? "Support shows up when things are hard — that’s not failure, that’s strategy. It reads like you’re using support for validation, planning, processing, or regulation."
         : "Support is part of your toolkit. Keeping it consistent tends to make other themes more manageable.";
 
     case "faith":
@@ -591,7 +592,7 @@ function themeInsightFromBucket(bucketId: string, themeAvg: number, sampleText: 
 
     default:
       return heavy
-        ? "This theme tends to appear on heavier days. The useful question is what makes it feel hard and what would make it 10% easier."
+        ? "This theme tends to appear on heavier days. The hard part seems to be what makes it feel tight or unsustainable."
         : light
         ? "This theme tends to show up on lighter days. It may be worth noticing what conditions make it easier."
         : "This theme is present; the context around it is what matters.";
@@ -634,84 +635,87 @@ function themeSummaryFromBucket(bucketId: string, bucketLabel: string, themeAvg:
   const repeats = matchCount >= 4;
 
   const insight = themeInsightFromBucket(bucketId, themeAvg, sampleText, matchCount);
+  const insightClause = normalize(firstSentence(insight)).replace(/[.!?]$/, "").trim();
 
   // Requirement: every summary is exactly 2 sentences:
   // (1) general description of the theme, (2) how it shows up for THIS user recently.
   // Keep it growth-oriented and non-diagnostic; avoid generic filler.
-  const personalizationLead = repeats ? "In your recent entries, this came up repeatedly" : "In your recent entries, this showed up";
+  const personalizationLead = repeats
+    ? "In your recent entries, this came up repeatedly"
+    : "In your recent entries, this showed up";
   const signalBit = signalClause ? ` (${signalClause})` : "";
 
   switch (bucketId) {
     case "romance_dating":
       return twoSentenceSummary(
         "Romance and dating can bring a mix of hope, uncertainty, and longing for connection.",
-        `${personalizationLead}${signalBit}, and the emotional tone reads like ambivalence rather than a simple yes/no. ${insight}`
+        `${personalizationLead}${signalBit}, and the emotional tone reads like ambivalence rather than a simple yes/no; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
 
     case "loneliness_solitude":
       return twoSentenceSummary(
         "Loneliness and solitude are different experiences, and it’s normal to feel pulled between connection and independence.",
-        `${personalizationLead}${signalBit}, suggesting you’re paying attention to the line between restorative alone time and isolating drift. ${insight}`
+        `${personalizationLead}${signalBit}, suggesting you’re paying attention to the line between restorative alone time and isolating drift; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
 
     case "family_dynamics":
       return twoSentenceSummary(
         "Family dynamics often carry history and subtext, which can make even normal conversations feel loaded.",
-        `${personalizationLead}${signalBit}, and what stands out is how the feeling lingers even without a clear “incident.” ${insight}`
+        `${personalizationLead}${signalBit}, and what stands out is how the feeling lingers even without a clear incident; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
 
     case "friendship_tension":
       return twoSentenceSummary(
         "Friendship tension is often less about the people and more about capacity, stress, and unmet needs.",
-        `${personalizationLead}${signalBit}, and it reads like low bandwidth affecting patience more than a lack of care. ${insight}`
+        `${personalizationLead}${signalBit}, and it reads like low bandwidth affecting patience more than a lack of care; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
 
     case "financial_relationships":
       return twoSentenceSummary(
         "Money stress isn’t just numbers; it can leak into patience, closeness, and how safe you feel with other people.",
-        `${personalizationLead}${signalBit}, and the pattern is the stress spilling over into how you relate to others day-to-day. ${insight}`
+        `${personalizationLead}${signalBit}, and the pattern is the stress spilling over into how you relate to others day-to-day; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
 
     case "relationships":
       return twoSentenceSummary(
         "Relationships are a major part of emotional life, and it’s normal for connection to feel both nourishing and complicated at different times.",
-        `${personalizationLead}${signalBit}, and your writing suggests you’re tracking the push-pull between closeness, distance, and feeling understood. ${insight}`
+        `${personalizationLead}${signalBit}, and your writing suggests you’re tracking the push-pull between closeness, distance, and feeling understood; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
 
     case "finances":
       return twoSentenceSummary(
         "Money and stability affect more than budgets; they influence safety, mood, and decision-making.",
-        `${personalizationLead}${signalBit}, and it reads like uncertainty is doing more harm than the numbers themselves. ${insight}`
+        `${personalizationLead}${signalBit}, and it reads like uncertainty is doing more harm than the numbers themselves; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
 
     case "work":
       return twoSentenceSummary(
         "Work pressure often shows up as time pressure, expectation, and lack of recovery.",
-        `${personalizationLead}${signalBit}, and it reads like the drain is coming from constant demand rather than one-off problems. ${insight}`
+        `${personalizationLead}${signalBit}, and it reads like the drain is coming from constant demand rather than one-off problems; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
 
     case "sleep":
       return twoSentenceSummary(
         "Sleep and energy shape what’s possible on any given day.",
-        `${personalizationLead}${signalBit}, and when energy dips, other stressors seem to hit harder. ${insight}`
+        `${personalizationLead}${signalBit}, and when energy dips, other stressors seem to hit harder; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
 
     case "selfcare":
       return twoSentenceSummary(
         "Self-care and grounding are the small stabilizers that change how the next hour feels.",
-        `${personalizationLead}${signalBit}, and the pattern suggests you’re learning which tiny resets actually shift your baseline. ${insight}`
+        `${personalizationLead}${signalBit}, and the pattern suggests you’re learning which tiny resets actually shift your baseline; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
 
     case "selfworth":
       return twoSentenceSummary(
         "Self-talk matters because it changes how you interpret everything else.",
-        `${personalizationLead}${signalBit}, and the sharpness seems to rise when you’re depleted or under pressure. ${insight}`
+        `${personalizationLead}${signalBit}, and the sharpness seems to rise when you’re depleted or under pressure; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
 
     default:
       return twoSentenceSummary(
         `${bucketLabel} is a recurring life context that can shape mood and capacity.`,
-        `${personalizationLead}${signalBit}, and the way you describe it suggests the context matters more than the label. ${insight}`
+        `${personalizationLead}${signalBit}, and the way you describe it suggests the context matters more than the label; ${insightClause.charAt(0).toLowerCase() + insightClause.slice(1)}.`
       );
   }
 }

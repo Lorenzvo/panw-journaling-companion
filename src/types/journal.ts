@@ -3,6 +3,11 @@ export type JournalEntry = {
     createdAt: string; // ISO
     text: string;
   };
+
+  export type ThemeTag = {
+    id: string;
+    label: string;
+  };
   
   export type Reflection = {
     entryId: string;
@@ -10,6 +15,7 @@ export type JournalEntry = {
     mirror: string;
     question: string;
     nudges: string[];
+    themes?: ThemeTag[];
     // Optional for backward-compat with older saved reflections.
     mode?: "local" | "enhanced";
   };
