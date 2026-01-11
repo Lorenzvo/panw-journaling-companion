@@ -9,7 +9,7 @@ import {
   intensityBoost,
 } from "./shared";
 
-// Expanded labels so the UI can feel more precise without pretending certainty.
+// Expanded labels let the UI feel specific without implying certainty.
 export type SentimentLabel = "very_low" | "low" | "mixed" | "steady" | "good" | "very_good";
 
 function titleCaseLabel(label: SentimentLabel) {
@@ -28,10 +28,10 @@ export function sentimentLabelTitle(label: SentimentLabel) {
 }
 
 /**
- * More detailed scoring than simple word count:
- * - negations flip the nearby polarity
- * - intensifiers increase weight
- * - “load” penalty if entry reads high-pressure even without explicit neg words
+ * Heuristic sentiment scoring:
+ * - negations flip nearby polarity
+ * - intensifiers adjust weight
+ * - “load” penalty captures time-pressure entries even without explicit negative words
  */
 export function scoreSentiment(text: string) {
   const t = normalize(text);

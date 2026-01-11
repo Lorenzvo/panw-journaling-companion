@@ -1,3 +1,6 @@
+// Shared, on-device text heuristics for Insights.
+// Keep utilities deterministic and free of DOM/network dependencies.
+
 export const POSITIVE = [
   "good",
   "great",

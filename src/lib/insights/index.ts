@@ -1,4 +1,4 @@
-// Local-only Insights (no network calls, no LLM)
+// Insights are computed on-device (no network calls, no LLM).
 
 export * from "./sentiment";
 export * from "./types";

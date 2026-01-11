@@ -11,7 +11,6 @@ const ALLOWED_COPING = new Set([
   "taking a shower/bath",
   "resting/sleep",
   "breathing/meditation",
-  // newer canonical additions
   "reading",
   "talking to someone",
   "coffee/tea",
@@ -102,7 +101,6 @@ export function whatHelped(memory: UserMemory, timeline: DayPoint[]): HelpItem[]
             "Reading looks like a gentle focus-switch — attention moves from rumination to a storyline, an idea, or a calmer pace.",
         };
       case "Shows & movies": {
-        // Only show this if the user explicitly mentioned it in their likes.
         const fav = pickSpecificLike(likes, /(anime|show|series|movie|drama)/i);
         return {
           label: "A familiar watch",

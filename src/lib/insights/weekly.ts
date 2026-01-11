@@ -74,7 +74,7 @@ function dedupeSentences(text: string) {
 
 function collapseSignals(signals: string[]) {
   const set = new Set(signals);
-  // If we have a more specific variant, drop the broader one.
+  // Prefer specificity to avoid redundant bullets.
   if (set.has("late-night meetings") && set.has("meetings")) set.delete("meetings");
   if (set.has("weekend work") && set.has("overtime")) set.delete("overtime");
   return Array.from(set);

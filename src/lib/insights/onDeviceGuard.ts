@@ -1,4 +1,3 @@
-// src/lib/insights/onDeviceGuard.ts
 // Insights must remain on-device (no entry text sent over the network).
 
 let installed = false;
@@ -19,7 +18,7 @@ export function installInsightsNetworkGuard() {
         ? input.url
         : "";
 
-    // Block OpenAI calls from Insights to keep analysis on-device.
+    // Block OpenAI calls while the Insights page is active.
     if (url.includes("api.openai.com") || url.includes("/v1/responses")) {
       throw new Error(
         "Insights are on-device only: network calls to OpenAI are blocked on this page."

@@ -2,6 +2,9 @@ import type { JournalEntry } from "../../types/journal";
 import { LOAD_SIGNALS, cleanSnippet, humanJoin, normalize, splitSentences, unique } from "./shared";
 import { scoreSentiment } from "./sentiment";
 
+// Theme extraction is heuristic and intentionally local-only.
+// Summaries are constrained for UI consistency (see `themeSummaryFromBucket`).
+
 export type Theme = {
   id: string;
   label: string;
@@ -160,20 +163,20 @@ const BUCKETS: Bucket[] = [
       const workWord = /\bwork\b/.test(t);
       const explicitWorkContext = /\bat work\b|\bworkload\b|\bworkday\b|\bjob\b|\boffice\b|\bshift\b/.test(t);
 
-      // Work-as-meaning/effort signal (e.g., "putting so much into work" / "what am I working toward")
+      // Work-as-meaning/effort signal (beyond just a job-context keyword).
       const workMeaningSignals =
         /\b(putting|pouring) (so much|a lot) (into|in) work\b|\bnot getting much back\b|\bnot getting much out\b|\bwhat (am|i'?m) i working toward\b|\bdon\'?t even know what i\'?m working toward\b|\bworking toward anymore\b|\bno longer know what i\'?m working toward\b/.test(
           t
         );
 
-      // Generic work word, but framed like a job/day context.
+      // Generic “work”, but framed as job/day context.
       const jobFraming = /\bwork (today|was|is|has been|again)\b|\bafter work\b|\bbefore work\b|\binto work\b|\bfrom work\b|\bat my job\b/.test(
         t
       );
 
       const relievedFromDeadlines = /\b(not (think|thinking) about deadlines?)\b|\bwithout thinking about deadlines?\b/.test(t);
 
-      // Avoid false positives from idioms like "work it out".
+      // Avoid false positives from idioms like “work it out”.
       if (idiomOnly && !(strongSignals || explicitWorkContext)) return 0;
       if (nonJobWorkOnly && !(strongSignals || explicitWorkContext || workMeaningSignals || jobFraming)) return 0;
 
@@ -247,7 +250,7 @@ const BUCKETS: Bucket[] = [
     },
   },
 
-  // New: Relationship-focused sub-themes (a single entry can hit multiple buckets)
+  // Relationship sub-themes (a single entry can match multiple buckets).
   {
     id: "romance_dating",
     label: "Romance & dating",
@@ -641,9 +644,7 @@ function themeSummaryFromBucket(bucketId: string, bucketLabel: string, themeAvg:
   const insight = themeInsightFromBucket(bucketId, themeAvg, sampleText, matchCount);
   const insightClause = firstSentence(insight).replace(/[.!?]$/, "").trim();
 
-  // Requirement: every summary is exactly 2 sentences:
-  // (1) general description of the theme, (2) how it shows up for THIS user recently.
-  // Keep it growth-oriented and non-diagnostic; avoid generic filler.
+  // Invariant: every summary is exactly two sentences (general + personalized).
   const personalizationLead = repeats
     ? "In your recent entries, this came up repeatedly"
     : "In your recent entries, this showed up";
