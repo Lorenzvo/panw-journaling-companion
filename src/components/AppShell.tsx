@@ -1,20 +1,24 @@
+import type { ReactNode } from "react";
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
+import { BarChart3, NotebookPen, PencilLine, Sparkles } from "lucide-react";
+
 import { Container } from "./Container";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { Toggle } from "./Toggle";
 import { cn } from "../lib/utils";
-import { Sparkles, NotebookPen, BarChart3, PencilLine } from "lucide-react";
-import { useState } from "react";
-import { ConfirmDialog } from "./ConfirmDialog";
+
+export type AppShellProps = {
+  privacyMode: boolean;
+  setPrivacyMode: (v: boolean) => void;
+  children: ReactNode;
+};
 
 export function AppShell({
   privacyMode,
   setPrivacyMode,
   children,
-}: {
-  privacyMode: boolean;
-  setPrivacyMode: (v: boolean) => void;
-  children: React.ReactNode;
-}) {
+}: AppShellProps) {
   const [confirmPrivacyOff, setConfirmPrivacyOff] = useState(false);
 
   function requestToggle(next: boolean) {
@@ -98,8 +102,8 @@ function Tab({
   children,
 }: {
   to: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
+  icon: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <NavLink

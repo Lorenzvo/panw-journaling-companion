@@ -1,4 +1,16 @@
 import { Card } from "./Card";
+import { Modal } from "./Modal";
+
+export type TutorialModalProps = {
+  open: boolean;
+  step: number;
+  total: number;
+  title: string;
+  body: string;
+  onNext: () => void;
+  onPrev: () => void;
+  onClose: () => void;
+};
 
 export function TutorialModal({
   open,
@@ -9,25 +21,12 @@ export function TutorialModal({
   onNext,
   onPrev,
   onClose,
-}: {
-  open: boolean;
-  step: number;
-  total: number;
-  title: string;
-  body: string;
-  onNext: () => void;
-  onPrev: () => void;
-  onClose: () => void;
-}) {
-  if (!open) return null;
+}: TutorialModalProps) {
+  const titleId = "tutorial-modal-title";
+  const descriptionId = "tutorial-modal-description";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div
-        className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <div className="relative w-[92vw] max-w-lg">
+    <Modal open={open} onClose={onClose} className="max-w-lg" labelledBy={titleId} describedBy={descriptionId}>
         <Card className="p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -47,8 +46,10 @@ export function TutorialModal({
             </button>
           </div>
 
-          <div className="mt-4 text-base font-semibold text-slate-900">{title}</div>
-          <div className="mt-2 text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+          <div id={titleId} className="mt-4 text-base font-semibold text-slate-900">
+            {title}
+          </div>
+          <div id={descriptionId} className="mt-2 text-sm text-slate-700 leading-relaxed whitespace-pre-line">
             {body}
           </div>
 
@@ -71,7 +72,6 @@ export function TutorialModal({
             </button>
           </div>
         </Card>
-      </div>
-    </div>
+    </Modal>
   );
 }

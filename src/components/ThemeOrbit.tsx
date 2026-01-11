@@ -1,7 +1,7 @@
 import { cn } from "../lib/utils";
 import type { ThemeTag } from "./ThemeChips";
 
-function stableAngle(index: number, count: number) {
+function stableAngle(index: number, count: number): number {
   if (count <= 0) return 0;
   const step = 360 / count;
   return index * step - 90; // start at top
@@ -31,6 +31,7 @@ export function ThemeOrbit({
         className
       )}
       style={{ width: size, height: size }}
+      role="img"
       aria-label="Detected themes"
     >
       <div className="absolute inset-4 rounded-full border border-slate-200/70" />

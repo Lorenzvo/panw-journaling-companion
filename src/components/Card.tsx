@@ -1,12 +1,16 @@
+import type { ReactNode } from "react";
+
 import { cn } from "../lib/utils";
+
+export type CardProps = {
+  className?: string;
+  children: ReactNode;
+};
 
 export function Card({
   className,
   children,
-}: {
-  className?: string;
-  children: React.ReactNode;
-}) {
+}: CardProps) {
   return (
     <div
       className={cn(

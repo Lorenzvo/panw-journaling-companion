@@ -1,4 +1,18 @@
 import { Card } from "./Card";
+import { Modal } from "./Modal";
+
+export type ConfirmDialogTone = "danger" | "neutral";
+
+export type ConfirmDialogProps = {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmText?: string;
+  cancelText?: string;
+  tone?: ConfirmDialogTone;
+  onConfirm: () => void;
+  onCancel: () => void;
+};
 
 export function ConfirmDialog({
   open,
@@ -6,20 +20,12 @@ export function ConfirmDialog({
   description,
   confirmText = "Confirm",
   cancelText = "Cancel",
-  tone = "danger", // "danger" | "neutral"
+  tone = "danger",
   onConfirm,
   onCancel,
-}: {
-  open: boolean;
-  title: string;
-  description: string;
-  confirmText?: string;
-  cancelText?: string;
-  tone?: "danger" | "neutral";
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  if (!open) return null;
+}: ConfirmDialogProps) {
+  const titleId = "confirm-dialog-title";
+  const descriptionId = "confirm-dialog-description";
 
   const confirmClasses =
     tone === "danger"
@@ -27,15 +33,12 @@ export function ConfirmDialog({
       : "bg-slate-900 text-white hover:opacity-95";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div
-        className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm"
-        onClick={onCancel}
-      />
-      <div className="relative w-[92vw] max-w-md">
+    <Modal open={open} onClose={onCancel} className="max-w-md" labelledBy={titleId} describedBy={descriptionId}>
         <Card className="p-4">
-          <div className="text-base font-semibold text-slate-900">{title}</div>
-          <div className="mt-2 text-sm text-slate-600 leading-relaxed">
+          <div id={titleId} className="text-base font-semibold text-slate-900">
+            {title}
+          </div>
+          <div id={descriptionId} className="mt-2 text-sm text-slate-600 leading-relaxed">
             {description}
           </div>
 
@@ -56,7 +59,6 @@ export function ConfirmDialog({
             </button>
           </div>
         </Card>
-      </div>
-    </div>
+    </Modal>
   );
 }

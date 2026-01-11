@@ -1,20 +1,24 @@
 import { cn } from "../lib/utils";
 
+export type ToggleProps = {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  sublabel?: string;
+};
+
 export function Toggle({
   checked,
   onChange,
   label,
   sublabel,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label: string;
-  sublabel?: string;
-}) {
+}: ToggleProps) {
   return (
     <button
       type="button"
       onClick={() => onChange(!checked)}
+      role="switch"
+      aria-checked={checked}
       className={cn(
         "flex items-center gap-3 rounded-2xl border px-3 py-2 text-left transition",
         checked

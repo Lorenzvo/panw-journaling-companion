@@ -29,7 +29,7 @@ const COLOR_BY_ID: Record<string, string> = {
   kids: "bg-lime-50 text-lime-900 border-lime-200",
 };
 
-function tagClasses(id: string) {
+function tagClasses(id: string): string {
   return COLOR_BY_ID[id] ?? "bg-white/70 text-slate-700 border-slate-200";
 }
 
@@ -74,10 +74,7 @@ export function ThemeChips({
             base,
             "bg-white/70 text-slate-700 border-slate-200"
           )}
-          title={themes
-            .slice(max)
-            .map((t) => t.label)
-            .join(", ")}
+          title={themes.slice(visible.length).map((t) => t.label).join(", ")}
         >
           +{extra}
         </span>
