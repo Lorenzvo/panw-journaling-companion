@@ -2,7 +2,6 @@ import type { JournalEntry } from "../../types/journal";
 import { LOAD_SIGNALS, dayKey, humanJoin, normalize, splitSentences, unique } from "./shared";
 import { scoreSentiment, sentimentLabel, type SentimentLabel } from "./sentiment";
 import { signalPhrasesForBucket, topBucketsForText, type Theme } from "./themes";
-import type { DayPoint } from "./types";
 
 export type WeeklySummary = {
   headline: string;
@@ -86,7 +85,7 @@ function hashString(s: string) {
   return h;
 }
 
-export function buildWeeklySummary(entries: JournalEntry[], themes: Theme[], _timeline: DayPoint[]): WeeklySummary {
+export function buildWeeklySummary(entries: JournalEntry[], themes: Theme[]): WeeklySummary {
   const now = new Date();
   const cutoff = new Date(now);
   cutoff.setDate(now.getDate() - 7);

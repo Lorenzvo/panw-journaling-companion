@@ -19,7 +19,6 @@ export async function generateEnhancedReflection(entryText: string, mem?: UserMe
 
   if (!apiKey) {
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.warn("[Solace] Enhanced reflection disabled: missing VITE_OPENAI_API_KEY (falling back to local).");
     }
     return generateLocalReflection(cleaned, mem);
@@ -126,7 +125,6 @@ Return ONLY JSON (no markdown, no commentary):
 
   try {
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.debug("[Solace] Calling OpenAI Responses API for enhanced reflection...");
     }
     const res = await fetch("https://api.openai.com/v1/responses", {
@@ -145,7 +143,6 @@ Return ONLY JSON (no markdown, no commentary):
     });
 
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.debug(`[Solace] OpenAI response status: ${res.status}`);
     }
 
@@ -173,10 +170,8 @@ Return ONLY JSON (no markdown, no commentary):
             ? "429 usually means rate-limited or out of quota/billing. Check the response body in DevTools and your OpenAI billing/usage limits."
             : "";
 
-        // eslint-disable-next-line no-console
         console.warn(`[Solace] Enhanced reflection failed (HTTP ${res.status})${detail ? `: ${detail}` : ""}`);
         if (hint) {
-          // eslint-disable-next-line no-console
           console.warn(`[Solace] ${hint}`);
         }
       }

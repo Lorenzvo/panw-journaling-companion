@@ -209,7 +209,7 @@ export function InsightsPage() {
   const timeline = useMemo(() => buildMoodTimeline(entries, 14), [entries]);
   const themes = useMemo(() => extractThemes(entries, 6), [entries]);
   const helped = useMemo(() => whatHelped(memory, timeline), [memory, timeline]);
-  const weekly = useMemo(() => buildWeeklySummary(entries, themes, timeline), [entries, themes, timeline]);
+  const weekly = useMemo(() => buildWeeklySummary(entries, themes), [entries, themes]);
 
   const latest = timeline[timeline.length - 1];
   const values = timeline.map((p) => p.avg);

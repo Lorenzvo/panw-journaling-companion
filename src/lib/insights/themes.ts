@@ -62,14 +62,14 @@ export function signalPhrasesForBucket(bucketId: string, t: string) {
       pushIf(/\bovertime\b/.test(t), "overtime");
       pushIf(/\bover the weekend\b|\bweekend\b/.test(t), "weekend work");
       pushIf(/\bno time\b/.test(t), "time squeeze");
-      pushIf(/\btime isn\'?t mine\b|\btime isnt mine\b/.test(t), "time squeeze");
+      pushIf(/\btime isn't mine\b|\btime isnt mine\b/.test(t), "time squeeze");
       pushIf(/\bback to back\b/.test(t), "back-to-back load");
       pushIf(/\bpressure\b/.test(t), "pressure");
-      pushIf(/\bnot getting much back\b|\bnot getting much out\b|\bwhat (am|i'?m) i working toward\b|\bdon\'?t even know what i\'?m working toward\b/.test(t), "effort without payoff");
+      pushIf(/\bnot getting much back\b|\bnot getting much out\b|\bwhat (am|i'?m) i working toward\b|\bdon't even know what i'?m working toward\b/.test(t), "effort without payoff");
       return out;
     case "sleep":
       pushIf(/\binsomnia\b/.test(t), "insomnia");
-      pushIf(/\bcan\'?t sleep\b/.test(t), "can’t sleep");
+      pushIf(/\bcan't sleep\b/.test(t), "can’t sleep");
       pushIf(/\bwoke up\b/.test(t), "broken sleep");
       pushIf(/\btired\b/.test(t), "tired");
       pushIf(/\bexhaust/.test(t), "exhausted");
@@ -153,10 +153,10 @@ const BUCKETS: Bucket[] = [
     ],
     score: (t) => {
       const idiomOnly = /\bwork (things|it) out\b|\bwork on (myself|me)\b/.test(t);
-      const nonJobWorkOnly = /\bit (didn\'?t|doesn\'?t|won\'?t) work\b|\bthat didn\'?t work\b|\bthis doesn\'?t work\b/.test(t);
+      const nonJobWorkOnly = /\bit (didn't|doesn't|won't) work\b|\bthat didn't work\b|\bthis doesn't work\b/.test(t);
 
       const strongSignals =
-        /\bboss(es)?\b|\bmeetings?\b|\bclients?\b|\bdeadlines?\b|\bovertime\b|\bworkload\b|\bshift\b|\bat work\b|\bjob\b|\boffice\b|\bback to back\b|\btime isn\'?t mine\b|\btime isnt mine\b/.test(
+        /\bboss(es)?\b|\bmeetings?\b|\bclients?\b|\bdeadlines?\b|\bovertime\b|\bworkload\b|\bshift\b|\bat work\b|\bjob\b|\boffice\b|\bback to back\b|\btime isn't mine\b|\btime isnt mine\b/.test(
           t
         );
 
@@ -165,7 +165,7 @@ const BUCKETS: Bucket[] = [
 
       // Work-as-meaning/effort signal (beyond just a job-context keyword).
       const workMeaningSignals =
-        /\b(putting|pouring) (so much|a lot) (into|in) work\b|\bnot getting much back\b|\bnot getting much out\b|\bwhat (am|i'?m) i working toward\b|\bdon\'?t even know what i\'?m working toward\b|\bworking toward anymore\b|\bno longer know what i\'?m working toward\b/.test(
+        /\b(putting|pouring) (so much|a lot) (into|in) work\b|\bnot getting much back\b|\bnot getting much out\b|\bwhat (am|i'?m) i working toward\b|\bdon't even know what i'?m working toward\b|\bworking toward anymore\b|\bno longer know what i'?m working toward\b/.test(
           t
         );
 
@@ -190,9 +190,9 @@ const BUCKETS: Bucket[] = [
         ...(relievedFromDeadlines ? [] : [/\bdeadlines?\b/i]),
         /\bno time\b/i,
         /\bno time to\b/i,
-        /\bdidn\'?t even get time\b/i,
+        /\bdidn't even get time\b/i,
         /\bdid not even get time\b/i,
-        /\btime isn\'?t mine\b/i,
+        /\btime isn't mine\b/i,
         /\btime isnt mine\b/i,
         /\bback to back\b/i,
         /\bpressure\b/i,
@@ -200,7 +200,7 @@ const BUCKETS: Bucket[] = [
         /\bworkload\b/i,
         /\bnot getting much back\b/i,
         /\bnot getting much out\b/i,
-        /\bdon\'?t even know what i\'?m working toward\b/i,
+        /\bdon't even know what i'?m working toward\b/i,
         /\bwhat (am|i'?m) i working toward\b/i,
       ]);
       return s;
@@ -531,7 +531,7 @@ function themeInsightFromBucket(bucketId: string, themeAvg: number, sampleText: 
   const t = normalize(sampleText);
   const load = LOAD_SIGNALS.reduce((acc, s) => (t.includes(s) ? acc + 1 : acc), 0);
   const hasAvoid = /\bavoid\b|\bignore\b|\bghost\b/.test(t);
-  const hasSleepDebt = /\binsomnia\b|\bpoor sleep\b|\bcan\'?t sleep\b|\bwoke up\b|\btired\b|\bexhaust/.test(t);
+  const hasSleepDebt = /\binsomnia\b|\bpoor sleep\b|\bcan't sleep\b|\bwoke up\b|\btired\b|\bexhaust/.test(t);
   const hasSelfCrit = /\bhate myself\b|\bworthless\b|\bfailure\b|\bnot good enough\b|\bshame\b|\bguilt\b/.test(t);
 
   const heavy = themeAvg <= -0.9;

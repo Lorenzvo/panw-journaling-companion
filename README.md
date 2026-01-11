@@ -1,73 +1,45 @@
-# React + TypeScript + Vite
+# Solace — Privacy-first journaling companion (prototype)
+ 
+ Solace is a lightweight journaling app designed to help users build a daily writing habit and gently surface patterns over time.
+ 
+ ## Problem
+ People want to journal consistently, but friction ("I don’t know what to write"), low energy, and fear of being judged can make the habit hard to sustain.
+ 
+ ## Solution (what this prototype demonstrates)
+ - **Low-pressure journaling UX**: starter chips, fast Save/Update, and optional “Reflect draft” so users can get value without committing.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+  - **Guided Session**: a 5‑minute structured journal that saves as one entry and generates a reflection.
+  - **Insights**: mood timeline, weekly snapshot, top themes, and "what seems to help" — all computed locally.
 
-Currently, two official plugins are available:
+  ## Privacy & trust
+  - **Insights never send journal text over the network.** A network guard is installed on the Insights page to enforce this.
+  - **Privacy Mode ON**: reflections are generated locally in the browser.
+  - **Privacy Mode OFF**: reflections can use an external LLM (requires an API key). The UI explicitly discloses this and asks for confirmation.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+  ## Responsible AI notes
+  - **Non-diagnostic framing**: sentiment/mood labels are presented as a “lens,” not a medical claim.
+  - **Limitations are explicit**: heuristics can be wrong; users are encouraged to treat results as feedback, not truth.
+  - **Safety**: reflection generation includes a lightweight safety note when self-harm intent is detected.
+  - **Data minimization**: “memory” is derived from the user’s saved entries and stored locally; it’s used subtly.
 
-## React Compiler
+  ## Tech
+  - React + TypeScript + Vite + Tailwind
+  - Routing: `react-router-dom`
+  - Testing: Vitest + React Testing Library
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+  ## Run locally
+  ```bash
+  npm install
+  npm run dev
+  ```
 
-## Expanding the ESLint configuration
+  ### Optional: enable enhanced reflections
+  Set `VITE_OPENAI_API_KEY` in your environment before running `npm run dev`.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
+  ## Quality checks
+  ```bash
+  npm test
+  npm run lint
+  npm run build
+  ```
       },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```

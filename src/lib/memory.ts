@@ -121,7 +121,7 @@ function extractPeopleMentions(text: string): string[] {
 }
 
 export function extractMemoryFromText(text: string, prev: UserMemory): UserMemory {
-  let mem = { ...prev };
+  const mem = { ...prev };
   const raw = (text ?? "").trim();
   if (!raw) return mem;
 
