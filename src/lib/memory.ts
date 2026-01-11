@@ -28,14 +28,33 @@ function canonicalCoping(textLower: string): string[] {
   if (/\bshower\b|\bbath\b/.test(textLower)) add("taking a shower/bath");
   if (/\bsleep\b|\bnap\b|\brest\b/.test(textLower)) add("resting/sleep");
   if (/\bbreath\b|\bbreathing\b|\bmeditat\b/.test(textLower)) add("breathing/meditation");
+  if (/\b(read|reading|book|novel|chapter)\b/.test(textLower)) add("reading");
+  if (/\b(talking to people|talking|talked|call|called|text|texted|face ?time|hang out|hung out|see people|with people)\b/.test(textLower)) {
+    add("talking to someone");
+  }
+  if (/\b(coffee|espresso|latte|cappuccino|tea)\b/.test(textLower)) add("coffee/tea");
 
   return out;
 }
 
 export function extractMemoryFromText(text: string, prev: UserMemory): UserMemory {
   let mem = { ...prev };
-  const t = text.trim();
-  if (!t) return mem;
+  const raw = text.trim();
+  if (!raw) return mem;
+
+  // Guided sessions include prompt text; only learn from the user's answers.
+  const firstLine = raw.split("\n")[0] ?? "";
+  const isGuided = /^Guided Session\s*(?:—|-|:)/i.test(firstLine.trim());
+  const t = isGuided
+    ? raw
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0)
+        .filter((l) => !/^Guided Session\s*(?:—|-|:)/i.test(l))
+        .filter((l) => !/^\d+\.\s+/.test(l))
+        .filter((l) => !/^One-line takeaway:/i.test(l))
+        .join("\n")
+    : raw;
 
   const lower = t.toLowerCase();
 

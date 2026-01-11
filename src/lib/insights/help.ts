@@ -3,6 +3,19 @@ import type { DayPoint } from "./types";
 
 export type HelpItem = { label: string; detail: string };
 
+const ALLOWED_COPING = new Set([
+  "going on walks",
+  "getting some movement",
+  "listening to music",
+  "taking a shower/bath",
+  "resting/sleep",
+  "breathing/meditation",
+  // newer canonical additions
+  "reading",
+  "talking to someone",
+  "coffee/tea",
+]);
+
 function canonicalHelp(label: string) {
   const t = label.toLowerCase();
   if (/(walk|walking|movement|move|exercise|run|gym|workout|stretch)/.test(t)) return "Movement";
@@ -30,7 +43,7 @@ function pickSpecificLike(likes: string[] | undefined, re: RegExp) {
 }
 
 export function whatHelped(memory: UserMemory, timeline: DayPoint[]): HelpItem[] {
-  const raw = (memory.coping ?? []).slice(0, 10);
+  const raw = (memory.coping ?? []).filter((x) => ALLOWED_COPING.has(x)).slice(0, 10);
   const canon = new Map<string, number>();
 
   for (const r of raw) {
@@ -58,10 +71,11 @@ export function whatHelped(memory: UserMemory, timeline: DayPoint[]): HelpItem[]
       case "Reading":
         return { label: "Reading", detail: "This shows up as a quiet focus-switch for you — attention moves from rumination to a storyline or idea." };
       case "Shows & movies": {
+        // Only show this if the user explicitly mentioned it in their likes.
         const fav = pickSpecificLike(likes, /(anime|show|series|movie|drama)/i);
         return {
           label: "A familiar watch",
-          detail: fav ? `You tend to reset with something familiar (like “${fav}”).` : "A familiar show/movie can be a low-effort way to soften the moment when you’re depleted.",
+          detail: fav ? `You tend to reset with something familiar (like “${fav}”).` : "",
         };
       }
       case "Food": {
@@ -71,6 +85,8 @@ export function whatHelped(memory: UserMemory, timeline: DayPoint[]): HelpItem[]
           detail: meal ? `Food sometimes acts like a stabilizer — you’ve mentioned liking “${meal}”.` : "Eating something steady can lower the background stress (especially on busy days).",
         };
       }
+      case "Warm drink":
+        return { label: "A warm drink", detail: "A simple stabilizer — a small comfort that can shift the next hour." };
       case "Resetting your space":
         return { label: "Resetting your space", detail: "Cleaning/organizing shows up as a control-lever: small order outside can reduce chaos inside." };
       case "Faith":
@@ -92,13 +108,16 @@ export function whatHelped(memory: UserMemory, timeline: DayPoint[]): HelpItem[]
     }
   });
 
+  // Drop empty placeholder items (ex: shows/movies with no explicit like).
+  const filtered = items.filter((i) => i.detail.trim().length > 0);
+
   const last = timeline[timeline.length - 1];
   const prev = timeline[timeline.length - 2];
   const trend = last && prev ? last.avg - prev.avg : 0;
 
-  if (trend < -0.9 && items.length < 4) {
-    items.push({ label: "One gentle thing", detail: "On heavier days, choosing one small stabilizer can lower the volume (not fix everything)." });
+  if (trend < -0.9 && filtered.length < 4) {
+    filtered.push({ label: "One gentle thing", detail: "On heavier days, choosing one small stabilizer can lower the volume (not fix everything)." });
   }
 
-  return items;
+  return filtered;
 }

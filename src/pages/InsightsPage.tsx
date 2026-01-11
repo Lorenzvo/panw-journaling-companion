@@ -205,7 +205,14 @@ function ThemeCard({
 }
 
 function entriesForDay(entries: JournalEntry[], dateKey: string) {
-  return entries.filter((e) => e.createdAt.slice(0, 10) === dateKey);
+  return entries.filter((e) => {
+    const d = new Date(e.createdAt);
+    if (Number.isNaN(d.getTime())) return e.createdAt.slice(0, 10) === dateKey;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}` === dateKey;
+  });
 }
 
 export function InsightsPage() {

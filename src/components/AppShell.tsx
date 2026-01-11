@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import { Container } from "./Container";
 import { Toggle } from "./Toggle";
 import { cn } from "../lib/utils";
-import { Sparkles, NotebookPen, BarChart3, CalendarCheck } from "lucide-react";
+import { Sparkles, NotebookPen, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { ConfirmDialog } from "./ConfirmDialog";
 
@@ -75,11 +75,11 @@ export function AppShell({
             <Tab to="/journal" icon={<NotebookPen size={16} />}>
               Journal
             </Tab>
+            <Tab to="/session" icon={<Sparkles size={16} />}>
+              Guided Session
+            </Tab>
             <Tab to="/insights" icon={<BarChart3 size={16} />}>
               Insights
-            </Tab>
-            <Tab to="/reflection" icon={<CalendarCheck size={16} />}>
-              Weekly
             </Tab>
           </nav>
         </Container>

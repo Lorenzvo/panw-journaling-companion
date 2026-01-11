@@ -18,6 +18,12 @@ function normalize(text: string) {
   return (text ?? "").trim().replace(/\s+/g, " ");
 }
 
+function snippet(text: string, max = 140) {
+  const t = normalize(text);
+  if (t.length <= max) return t;
+  return t.slice(0, Math.max(0, max - 1)).trimEnd() + "…";
+}
+
 function looksLikeGibberish(text: string) {
   const t = normalize(text);
   if (!t) return true;
@@ -528,20 +534,229 @@ function localAnxiety(memLine: string | null): ReflectionOutput {
   return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), question, nudges };
 }
 
-function localWins(memLine: string | null): ReflectionOutput {
-  const mirror = pick([
-    "This is worth holding onto. Wins don’t have to be dramatic to count.",
-    "I love that you noticed this. That’s how you build a record of what actually works for you.",
-    "That’s a real bright spot. Let it land.",
+type GuidedSessionQA = { q: string; a: string };
+
+function parseGuidedSession(text: string): { modeTitle: string; qa: GuidedSessionQA[]; takeaway?: string } | null {
+  const lines = (text ?? "").split("\n").map((l) => l.trimEnd());
+  const header = (lines[0] ?? "").trim();
+  const headerMatch = header.match(/^Guided Session\s*(?:—|-|:)\s*(.+)$/i);
+  if (!headerMatch) return null;
+
+  const modeTitle = (headerMatch[1] ?? "").trim();
+  const qa: GuidedSessionQA[] = [];
+
+  let i = 1;
+  while (i < lines.length) {
+    const line = (lines[i] ?? "").trim();
+    const m = line.match(/^\d+\.\s+(.*)$/);
+    if (!m) {
+      i++;
+      continue;
+    }
+
+    const q = m[1].trim();
+    i++;
+    const answerLines: string[] = [];
+    while (i < lines.length) {
+      const cur = (lines[i] ?? "");
+      const curTrim = cur.trim();
+      if (!curTrim) {
+        i++;
+        break;
+      }
+      if (/^\d+\.\s+/.test(curTrim) || /^One-line takeaway:/i.test(curTrim)) break;
+      answerLines.push(curTrim);
+      i++;
+    }
+
+    const a = answerLines.join("\n").trim();
+    if (q) qa.push({ q, a });
+  }
+
+  const takeawayIdx = lines.findIndex((l) => /^One-line takeaway:/i.test(l.trim()));
+  const takeaway = takeawayIdx >= 0 ? (lines[takeawayIdx + 1] ?? "").trim() : undefined;
+
+  return { modeTitle, qa, takeaway };
+}
+
+function detectPositiveWinCategory(text: string):
+  | "gym"
+  | "movement"
+  | "hobby"
+  | "social"
+  | "cooking"
+  | "health_progress"
+  | "life_admin"
+  | "general" {
+  const t = text.toLowerCase();
+  if (/\b(gym|workout|weights|lifting)\b/.test(t)) return "gym";
+  if (/\b(run|ran|walk|walked|jog|yoga|stretch|exercise)\b/.test(t)) return "movement";
+  if (/\b(ice skat|skating|hobby|painting|drawing|music|guitar|piano|read|reading|game|gaming|knit|crochet|photography)\b/.test(t)) {
+    return "hobby";
+  }
+  if (/\b(hung out|hang out|friends?|social|party|date|with people|met up)\b/.test(t)) return "social";
+  if (/\b(cook|cooked|bake|baked|meal|recipe)\b/.test(t)) return "cooking";
+  if (/\b(weight\s*loss|lost\s+weight|scale|down\s+\d+\s*(lb|lbs|pounds|kg))\b/.test(t)) return "health_progress";
+  if (/\b(clean|cleaned|laundry|dishes|tidy|organized|declutter|errands?)\b/.test(t)) return "life_admin";
+  return "general";
+}
+
+function localWins(text: string, memLine: string | null): ReflectionOutput {
+  const guided = parseGuidedSession(text);
+  const category = detectPositiveWinCategory(text);
+
+  const guidedWin = guided?.qa[0]?.a?.trim() ?? "";
+  const guidedWhy = guided?.qa[1]?.a?.trim() ?? "";
+  const guidedKindStory = guided?.qa[2]?.a?.trim() ?? "";
+  const guidedNext = guided?.qa[3]?.a?.trim() ?? "";
+
+  const anchor = guidedWin || normalize(text).slice(0, 160);
+
+  const categoryLine = (() => {
+    if (category === "gym") {
+      return pick([
+        "Going to the gym (especially when you’ve been avoiding it) is a bigger step than it sounds — it’s walking into effort on purpose.",
+        "The first gym trip is its own hurdle — new space, new rhythm, new discomfort. Showing up anyway matters.",
+      ]);
+    }
+    if (category === "movement") {
+      return pick([
+        "Choosing movement on a day you could’ve stayed stuck is a quiet kind of self-trust.",
+        "That kind of ‘I did it anyway’ energy is how momentum starts.",
+      ]);
+    }
+    if (category === "social") {
+      return pick([
+        "Showing up socially can take real energy — especially when it’d be easier to stay in your head.",
+        "Connection counts as a win. It’s you choosing life outside the loop.",
+      ]);
+    }
+    if (category === "hobby") {
+      return pick([
+        "Making space for a hobby is you giving yourself more than just responsibilities.",
+        "That’s the kind of win that restores you — not just checks a box.",
+      ]);
+    }
+    if (category === "cooking") {
+      return pick([
+        "Cooking for yourself is care you can actually taste.",
+        "That’s a grounded win — effort that turns into something real.",
+      ]);
+    }
+    if (category === "health_progress") {
+      return pick([
+        "Noticing progress is good — the part that really matters is the pattern you’re building to support yourself.",
+        "That’s a meaningful step. Sustainable progress is usually made of moments exactly like this.",
+      ]);
+    }
+    if (category === "life_admin") {
+      return pick([
+        "Life-admin wins count. Clearing one small thing can unclog your whole day.",
+        "That’s you reducing friction for future-you — genuinely kind.",
+      ]);
+    }
+    return pick([
+      "This is worth holding onto. Wins don’t have to be dramatic to count.",
+      "I love that you noticed this. That’s how you build a record of what actually works for you.",
+      "That’s a real bright spot. Let it land.",
+    ]);
+  })();
+
+  const mirrorParts: string[] = [];
+  mirrorParts.push(
+    guided
+      ? pick([
+          `That’s a real win — and it sounds earned. (${guided.modeTitle} sessions are basically practice reps for your life.)`,
+          `This reads like a genuine “I moved myself forward” moment.`,
+        ])
+      : pick([
+          "That’s a real win.",
+          "This deserves credit.",
+        ])
+  );
+
+  // Echo something specific so it feels personal.
+  if (anchor) {
+    mirrorParts.push(pick([
+      `The part that stands out: “${snippet(anchor, 120)}”.`,
+      `The detail I’m glad you wrote down: “${snippet(anchor, 120)}”.`,
+    ]));
+  }
+
+  mirrorParts.push(categoryLine);
+
+  if (guidedWhy) {
+    mirrorParts.push(
+      pick([
+        `And your “why” is clear — ${snippet(guidedWhy, 140)}. That’s you choosing a shift, not waiting for motivation.`,
+        `You didn’t just stumble into it — ${snippet(guidedWhy, 140)}. That’s real intention.`,
+      ])
+    );
+  }
+
+  if (guidedKindStory) {
+    mirrorParts.push(
+      pick([
+        `I also hear something kind in the way you named yourself: “${snippet(guidedKindStory, 120)}.” Keep that voice.`,
+        `That line — “${snippet(guidedKindStory, 120)}” — is the tone that makes change sustainable.`,
+      ])
+    );
+  }
+
+  if (guidedNext) {
+    mirrorParts.push(
+      pick([
+        `Next step: “${snippet(guidedNext, 90)}.” Love that it’s simple — consistency beats intensity.`,
+        `“${snippet(guidedNext, 90)}” is perfect. Keep it small enough that it actually happens.`,
+      ])
+    );
+  }
+
+  const question = pick([
+    "What would make the next time 10% easier to start?",
+    "If you replay this win, what part of *you* do you want to remember most?",
+    "What’s the smallest, most realistic version of your next step this week?",
   ]);
 
-  const includeQuestion = Math.random() < 0.35;
-  const question = includeQuestion ? pick([
-    "What did you do that helped make this happen?",
-    "What do you want future-you to remember about this moment?",
-  ]) : undefined;
+  const nudges = Math.random() < 0.3
+    ? pick([
+        ["Write one line to future-you: “When it feels hard, remember…”"],
+        ["Pick a tiny ‘minimum version’ of the habit you can do even on a bad day."],
+        ["Name what helped: time, place, cue, or a thought that pushed you forward."],
+      ])
+    : undefined;
 
-  const nudges = Math.random() < 0.25 ? ["Write one line: “I’m proud that I…”"] : undefined;
+  return {
+    mode: "local",
+    mirror: [mirrorParts.join("\n\n"), memLine].filter(Boolean).join("\n\n"),
+    question,
+    nudges,
+  };
+}
+
+function localHealthPositive(text: string, memLine: string | null): ReflectionOutput {
+  const category = detectPositiveWinCategory(text);
+
+  const mirror =
+    category === "gym"
+      ? pick([
+          "That’s a strong kind of win — you went to the gym. The first step is often the hardest one.",
+          "Going to the gym counts twice: you did the effort, and you proved you can start.",
+        ])
+      : pick([
+          "That sounds like your body got something good today.",
+          "That kind of self-care is quiet, but it’s real.",
+        ]);
+
+  const question = pick([
+    "What helped you actually get started — timing, mindset, a plan, someone else?",
+    "What would you want to repeat from this the next time you try it?",
+  ]);
+
+  const nudges = Math.random() < 0.25 ? pick([
+    ["Write one sentence: “I’m the kind of person who…” (keep it believable)."],
+    ["Pick a tiny next step you can do within 24 hours."],
+  ]) : undefined;
 
   return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), question, nudges };
 }
@@ -561,8 +776,252 @@ function localFoodPositive(text: string, memLine: string | null): ReflectionOutp
   return { mode: "local", mirror: [mirror, memLine].filter(Boolean).join("\n\n"), nudges };
 }
 
+function localGuidedSession(
+  guided: { modeTitle: string; qa: { q: string; a: string }[]; takeaway?: string },
+  memLine: string | null
+): ReflectionOutput {
+  const mode = guided.modeTitle.toLowerCase().trim();
+  const a1 = guided.qa[0]?.a?.trim() ?? "";
+  const a2 = guided.qa[1]?.a?.trim() ?? "";
+  const a3 = guided.qa[2]?.a?.trim() ?? "";
+  const a4 = guided.qa[3]?.a?.trim() ?? "";
+
+  const answers = [a1, a2, a3, a4].filter(Boolean);
+
+  const allowedShort = new Set([
+    "ok",
+    "okay",
+    "fine",
+    "good",
+    "great",
+    "meh",
+    "tired",
+    "exhausted",
+    "sad",
+    "happy",
+    "anxious",
+    "stressed",
+    "calm",
+    "busy",
+    "neutral",
+  ]);
+
+  function looksLikePlaceholderAnswer(a: string) {
+    const n = normalize(a);
+    const lower = n.toLowerCase();
+    if (!n) return true;
+
+    // single-letter / tiny fragments
+    if (n.length <= 2 && !allowedShort.has(lower)) return true;
+
+    // repeated-char placeholder (aaaa, ....)
+    if (/^(.)\1{2,}$/.test(lower)) return true;
+
+    // common non-answers
+    if (/^(idk|n\/?a|na|none|nothing|whatever|\?+)$/.test(lower)) return true;
+
+    // keysmash-ish
+    const letters = (lower.match(/[a-z]/g) ?? []).length;
+    const vowels = (lower.match(/[aeiou]/g) ?? []).length;
+    if (letters >= 10 && vowels / Math.max(1, letters) < 0.15) return true;
+
+    return false;
+  }
+
+  const meaningful = answers.filter((a) => !looksLikePlaceholderAnswer(a));
+
+  // If the user basically entered placeholders ("a", keysmash, etc.), ask for one more sentence
+  // instead of generating a confident reflection.
+  if (answers.length > 0 && meaningful.length === 0) {
+    const mirror = pick([
+      "I’m here — I only got tiny fragments (like a placeholder), so I can’t reflect back much yet.",
+      "I caught the structure of the session, but the answers look like placeholders — want to add one real sentence?",
+    ]);
+
+    const question = pick([
+      "Which prompt is easiest to answer with one honest sentence?",
+      "Want to expand just one answer — the one that feels most real right now?",
+    ]);
+
+    const nudges = pick([
+      [
+        "Unwind: “What’s still buzzing is…”",
+        "Helped: “One thing that helped was…”",
+        "Let go: “Tonight I’m letting go of…”",
+        "Next hour: “One kind thing I’ll do is…”",
+      ],
+      [
+        "If you’re tired: “I’m exhausted because ___.”",
+        "If you’re blank: “The main thing on my mind is ___.”",
+      ],
+    ]);
+
+    return { mode: "local", mirror, question, nudges };
+  }
+
+  // Keep it warm + specific, without over-claiming.
+  if (mode === "small win") {
+    return localWins(
+      [
+        guided.qa.map((x, i) => `${i + 1}. ${x.q}\n${x.a}`).join("\n\n"),
+        guided.takeaway ? `One-line takeaway:\n${guided.takeaway}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      memLine
+    );
+  }
+
+  if (mode === "unwind") {
+    const mirror = [
+      pick([
+        "This reads like a tired day — the kind where your body’s asking for a softer landing.",
+        "I hear low energy here. You’re not being lazy — you’re depleted.",
+      ]),
+      a1 ? `The ‘buzzing’ you named: “${snippet(a1, 110)}”.` : null,
+      a2
+        ? pick([
+            `And you did reach for a few real stabilizers: ${snippet(a2, 120)}. Those count — especially on tired days.`,
+            `What helped wasn’t abstract — it was concrete: ${snippet(a2, 120)}. That’s useful information.`,
+          ])
+        : null,
+      a3
+        ? pick([
+            `Letting go of “${snippet(a3, 90)}” tonight is a boundary — even if it’s a small one.`,
+            `You’re trying to set work down for the night. That’s a skill, not a switch.`,
+          ])
+        : null,
+      a4
+        ? pick([
+            `For the next hour, “${snippet(a4, 90)}” sounds like exactly the right kind of gentle.`,
+            `“${snippet(a4, 90)}” feels like a kind choice — quiet, doable, restorative.`,
+          ])
+        : null,
+      memLine,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const question = pick([
+      "What would make it easier to actually let work go tonight — a quick brain-dump, a boundary, or a ‘good enough’ plan for tomorrow?",
+      "If you could give tired-you one permission slip tonight, what would it say?",
+      "What’s the smallest version of rest you can actually do in the next 20 minutes?",
+    ]);
+
+    const nudges = Math.random() < 0.35
+      ? pick([
+          ["Write 3 bullets: what can wait / what can’t / what you’ll do tomorrow."],
+          ["Choose one closing ritual: shower, tea/coffee, one chapter, lights out."],
+        ])
+      : undefined;
+
+    return { mode: "local", mirror, question, nudges };
+  }
+
+  if (mode === "untangle") {
+    const mirror = [
+      pick([
+        "This reads like you’re trying to turn a knot into something you can hold.",
+        "You’re doing the right move here: naming the knot instead of letting it stay foggy.",
+      ]),
+      a1 ? `The knot: “${snippet(a1, 120)}”.` : null,
+      a2 ? `Control vs not-in-control: ${snippet(a2, 160)}.` : null,
+      a3
+        ? pick([
+            `The story your brain is telling — “${snippet(a3, 140)}” — makes sense as a protective reflex.`,
+            `That thought — “${snippet(a3, 140)}” — is heavy to carry. Noticing it is already progress.`,
+          ])
+        : null,
+      a4
+        ? pick([
+            `Your next step is refreshingly real: “${snippet(a4, 110)}.”`,
+            `That next step — “${snippet(a4, 110)}” — is the kind that creates traction.`,
+          ])
+        : null,
+      memLine,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const question = pick([
+      "What’s the smallest piece of this that would change how you feel by 10%?",
+      "If you assumed you don’t have to solve it today, what would you do next?",
+    ]);
+
+    const nudges = Math.random() < 0.35 ? pick([
+      ["Write: ‘If this goes okay, what changes? If it goes badly, what’s still true?’"],
+      ["Name one assumption you can test in 24 hours."],
+    ]) : undefined;
+
+    return { mode: "local", mirror, question, nudges };
+  }
+
+  // Default: Check-in or anything else.
+  const mirror = [
+    pick([
+      "Thanks for checking in with yourself. This is the kind of small honesty that helps." ,
+      "This reads like a clear snapshot — not dramatic, just real.",
+    ]),
+    a1 ? `How you’re doing: “${snippet(a1, 120)}”.` : null,
+    a2 ? `What’s taking space: “${snippet(a2, 140)}”.` : null,
+    a3 ? `What you need more of: “${snippet(a3, 120)}”.` : null,
+    memLine,
+  ].filter(Boolean).join("\n\n");
+
+  const question = pick([
+    "If you could meet one of those needs today, what’s the smallest way you’d do it?",
+    "What would support look like in the next 24 hours — structure, rest, or connection?",
+  ]);
+
+  return { mode: "local", mirror, question };
+}
+
 export function generateLocalReflection(entryText: string, mem?: UserMemory): ReflectionOutput {
   const cleaned = normalize(entryText);
+
+  // Guided Sessions: reflect from the user's answers (not the prompt text).
+  const guided = parseGuidedSession(cleaned);
+  if (guided) {
+    const guidedAnswers = guided.qa.map((x) => normalize(x.a)).filter(Boolean);
+    const answerOnly = normalize(guidedAnswers.join(" "));
+
+    // If answers are basically placeholders ("a", "?", etc.), prompt for one real sentence.
+    const tokens = answerOnly.split(" ").filter(Boolean);
+    const allSingleChar = tokens.length > 0 && tokens.every((t) => t.length === 1);
+    if (allSingleChar) {
+      const out: ReflectionOutput = {
+        mode: "local",
+        mirror: pick([
+          "I’m here — I only got tiny placeholder answers, so I can’t reflect back much yet.",
+          "I caught the structure of the session, but the answers look like placeholders. Want to add one real sentence?",
+        ]),
+        question: pick([
+          "Which prompt is easiest to answer with one honest sentence?",
+          "Want to expand just one answer — the one that feels most real right now?",
+        ]),
+        nudges: pick([
+          [
+            "Unwind: “What’s still buzzing is…”",
+            "Helped: “One thing that helped was…”",
+            "Let go: “Tonight I’m letting go of…”",
+            "Next hour: “One kind thing I’ll do is…”",
+          ],
+          [
+            "If you’re tired: “I’m exhausted because ___.”",
+            "If you’re blank: “The main thing on my mind is ___.”",
+          ],
+        ]),
+      };
+
+      return { ...out, mirror: ensureSafetyNote(out.mirror, answerOnly || cleaned) };
+    }
+
+    const guidedTone = detectTone(answerOnly);
+    const guidedTopic = detectTopic(answerOnly);
+    const guidedMemLine = maybeMemoryLine(mem, guidedTone, guidedTopic);
+    const out = localGuidedSession(guided, guidedMemLine);
+    return { ...out, mirror: ensureSafetyNote(out.mirror, answerOnly || cleaned) };
+  }
 
   if (looksLikeGibberish(cleaned)) {
     const out: ReflectionOutput = {
@@ -585,6 +1044,7 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
   const topic = detectTopic(cleaned);
   const memLine = maybeMemoryLine(mem, tone, topic);
 
+
   if (tone === "positive" && detectGoodNothingNew(cleaned)) {
     const out = localGoodNothingNew(memLine);
     return { ...out, mirror: ensureSafetyNote(out.mirror, cleaned) };
@@ -604,9 +1064,11 @@ export function generateLocalReflection(entryText: string, mem?: UserMemory): Re
   if (topic === "relationships") return localRelationships(cleaned, memLine);
   if (topic === "decisions") return localDecisions(memLine);
   if (topic === "anxiety_rumination") return localAnxiety(memLine);
-  if (topic === "wins_gratitude") return localWins(memLine);
+  if (topic === "wins_gratitude") return localWins(cleaned, memLine);
 
   if (topic === "food" && tone === "positive") return localFoodPositive(cleaned, memLine);
+
+  if (topic === "health" && tone === "positive") return localHealthPositive(cleaned, memLine);
 
   if (topic === "work" && (tone === "negative" || tone === "mixed")) return localWorkStress(cleaned, memLine);
 
@@ -692,8 +1154,20 @@ export async function generateEnhancedReflection(
   if (!apiKey) return generateLocalReflection(cleaned, mem);
   if (looksLikeGibberish(cleaned)) return generateLocalReflection(cleaned, mem);
 
-  const tone = detectTone(cleaned);
-  const topic = detectTopic(cleaned);
+  // Guided Sessions: analyze answers only (ignore prompt text).
+  const guided = parseGuidedSession(cleaned);
+  const guidedAnswers = guided ? guided.qa.map((x) => normalize(x.a)).filter(Boolean) : [];
+  const answerOnly = guided ? normalize(guidedAnswers.join(" ")) : "";
+
+  // If Guided Session answers are placeholders ("a a a"), fall back to local prompting.
+  const tokens = answerOnly.split(" ").filter(Boolean);
+  const allSingleChar = guided && tokens.length > 0 && tokens.every((t) => t.length === 1);
+  if (guided && allSingleChar) return generateLocalReflection(cleaned, mem);
+
+  const analysisText = guided ? answerOnly : cleaned;
+
+  const tone = detectTone(analysisText);
+  const topic = detectTopic(analysisText);
   const tooTiredIntent = detectTooTired(cleaned);
   const goodNothingNewIntent = detectGoodNothingNew(cleaned);
 
@@ -721,7 +1195,7 @@ Topic handling requirements:
 - If intentTooTired is true: normalize it and offer a tiny (10–30 second) journaling option (2–3 concrete prompts). Ask 1 gentle question.
 - If intentGoodNothingNew is true and tone is positive: validate it as a small win (calm counts) and ask a small follow-up that fits.
 - If detectedTopic is "work": validate + name the likely stressor (schedule/pressure/time not feeling yours) and ask 1 next-step question that fits the entry.
-- If detectedTopic is "wins_gratitude": it’s OK to be short, and it’s OK to have no question.
+- If detectedTopic is "wins_gratitude": respond warmly and specifically. Name why it matters, reinforce the user’s agency (what they did), and offer 1 concrete encouragement. Optional: 1 gentle follow-up question.
 - If detectedTopic is "general" and tone is neutral: keep it light, but still respond to what they actually said (no template filler).
 `.trim();
 
@@ -733,7 +1207,7 @@ Critical rules:
 - DO NOT invent details, phrases, or vibes the user didn’t say.
 - Do NOT quote the user or say “You wrote:”.
 - Avoid therapy clichés unless truly appropriate.
-- Mirror should be 2–6 sentences. (Short is okay if it fits.)
+- Mirror should be 4–10 sentences, and must include at least 1 specific, grounded detail from the entry (paraphrase, don’t quote).
 - Question and nudges are optional and can be null.
 - If the user is asking a direct question (e.g., “where do I start?”), you must answer it directly.
 - If the entry already answers a prior question inside it, acknowledge that and move forward (don’t ignore it).
@@ -752,7 +1226,7 @@ Context:
 - memory: ${JSON.stringify(memoryContext)}
 
 User entry:
-${cleaned}
+${guided ? `Guided session mode: ${guided.modeTitle}\nAnswers only (no prompt text):\n${answerOnly}` : cleaned}
 
 Return ONLY JSON (no markdown, no commentary):
 {

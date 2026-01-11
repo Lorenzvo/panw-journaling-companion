@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card } from "../components/Card";
 import { cn, formatDateLong } from "../lib/utils";
 import { loadEntries, loadReflections, saveEntries, saveReflections } from "../lib/storage";
@@ -16,6 +17,15 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function dayKeyFromCreatedAt(createdAt: string) {
+  const d = new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return createdAt.slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 const STARTER_CHIPS = [
   "Quick recap: today I…",
   "One thing that went well was…",
@@ -26,6 +36,7 @@ const STARTER_CHIPS = [
 ];
 
 export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
 
@@ -76,13 +87,32 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set());
 
+  const entryParam = searchParams.get("entry");
+
+  useEffect(() => {
+    if (!entryParam) return;
+    const entry = entries.find((e) => e.id === entryParam);
+    if (!entry) return;
+
+    setSelectedEntryId(entryParam);
+    setExpandedDays((prev) => {
+      const next = new Set(prev);
+      next.add(entry.createdAt.slice(0, 10));
+      return next;
+    });
+
+    const next = new URLSearchParams(searchParams);
+    next.delete("entry");
+    setSearchParams(next, { replace: true });
+  }, [entryParam, entries, searchParams, setSearchParams]);
+
   const todayLabel = useMemo(() => formatDateLong(new Date()), []);
   const hasDraft = text.trim().length > 0;
 
   const dayGroups = useMemo(() => {
     const groups = new Map<string, JournalEntry[]>();
     for (const e of entries) {
-      const k = e.createdAt.slice(0, 10); // YYYY-MM-DD
+      const k = dayKeyFromCreatedAt(e.createdAt); // local YYYY-MM-DD
       const cur = groups.get(k);
       if (cur) cur.push(e);
       else groups.set(k, [e]);
@@ -130,7 +160,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     setSelectedEntryId(entry.id);
     setText(entry.text);
     setReflectError(null);
-    const dayKey = entry.createdAt.slice(0, 10);
+    const dayKey = dayKeyFromCreatedAt(entry.createdAt);
     setExpandedDays((prev) => {
       const next = new Set(prev);
       next.add(dayKey);
@@ -159,7 +189,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     setSelectedEntryId(entry.id);
     setEditingEntryId(entry.id);
     setText(trimmed); // keep it in editor so they can keep editing if they want
-    const dayKey = entry.createdAt.slice(0, 10);
+    const dayKey = dayKeyFromCreatedAt(entry.createdAt);
     setExpandedDays((prev) => {
       const next = new Set(prev);
       next.add(dayKey);
@@ -192,7 +222,7 @@ export function JournalPage({ privacyMode }: { privacyMode: boolean }) {
     setEditingEntryId(entryId);
     setExpandedDays((prev) => {
       const next = new Set(prev);
-      next.add(updated.createdAt.slice(0, 10));
+      next.add(dayKeyFromCreatedAt(updated.createdAt));
       return next;
     });
     return updated;
